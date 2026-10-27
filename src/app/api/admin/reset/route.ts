@@ -11,7 +11,8 @@ export async function POST() {
   try {
     const state = await resetDraftPicks();
     return NextResponse.json({ success: true, state });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to reset draft' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to reset draft';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

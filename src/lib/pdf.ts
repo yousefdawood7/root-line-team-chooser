@@ -178,7 +178,7 @@ export function generateRosterPDF(
   doc.text('Date: _______________________', margin + sigColWidth + 20, sigY + 8);
 
   // Running Page Numbering
-  const totalPages = (doc.internal as any).getNumberOfPages();
+  const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFont('helvetica', 'normal');

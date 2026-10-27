@@ -27,8 +27,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Pick error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to pick candidate' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to pick candidate';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

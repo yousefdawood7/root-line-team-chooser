@@ -30,8 +30,9 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-store',
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('PDF generation error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to generate PDF' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Failed to generate PDF';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

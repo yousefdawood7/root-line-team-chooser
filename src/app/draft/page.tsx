@@ -1,14 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search,
   Users,
-  Briefcase,
   Building,
-  CheckCircle2,
-  Lock,
   Eye,
   RefreshCw,
   AlertTriangle,
@@ -31,7 +28,6 @@ export default function DraftPage() {
   const [currentLead, setCurrentLead] = useState<Lead | null>(null);
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,8 +40,7 @@ export default function DraftPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isProposeOpen, setIsProposeOpen] = useState(false);
 
-  const fetchData = useCallback(async (isBackground = false) => {
-    if (!isBackground) setRefreshing(true);
+  const fetchData = useCallback(async () => {
     try {
       const meRes = await fetch('/api/auth/me');
       if (!meRes.ok) {
@@ -72,14 +67,16 @@ export default function DraftPage() {
       console.error('Failed to fetch draft data:', err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [router]);
 
   useEffect(() => {
-    fetchData();
+    const run = async () => {
+      await fetchData();
+    };
+    run();
     const interval = setInterval(() => {
-      fetchData(true);
+      run();
     }, 4000);
     return () => clearInterval(interval);
   }, [fetchData]);
@@ -96,7 +93,7 @@ export default function DraftPage() {
       throw new Error(data.error || 'Failed to claim candidate');
     }
 
-    await fetchData(true);
+    await fetchData();
 
     if (previewCandidate && previewCandidate.id === candidateId && data.candidate) {
       setPreviewCandidate(data.candidate);
@@ -115,7 +112,7 @@ export default function DraftPage() {
       throw new Error(data.error || 'Failed to release candidate');
     }
 
-    await fetchData(true);
+    await fetchData();
 
     if (previewCandidate && previewCandidate.id === candidateId) {
       setPreviewCandidate({
@@ -134,10 +131,11 @@ export default function DraftPage() {
   };
 
   // Only show approved candidates in public catalog
+  const candidatesList = draftState?.candidates;
   const approvedCandidates = useMemo(() => {
-    if (!draftState?.candidates) return [];
-    return draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
-  }, [draftState?.candidates]);
+    if (!candidatesList) return [];
+    return candidatesList.filter((c) => c.approvalStatus !== 'pending');
+  }, [candidatesList]);
 
   const departments = useMemo(() => {
     const depts = new Set<string>();
@@ -213,7 +211,6 @@ export default function DraftPage() {
       <Navbar
         user={currentUser}
         lead={currentLead}
-        isLocked={draftState?.settings.isLocked}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -502,7 +499,7 @@ export default function DraftPage() {
       <ProposeCandidateModal
         isOpen={isProposeOpen}
         onClose={() => setIsProposeOpen(false)}
-        onSuccess={() => fetchData(true)}
+        onSuccess={() => fetchData()}
       />
     </div>
   );

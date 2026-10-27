@@ -30,8 +30,9 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-store',
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Export Excel error:', err);
-    return NextResponse.json({ error: err.message || 'Export failed' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Export failed';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

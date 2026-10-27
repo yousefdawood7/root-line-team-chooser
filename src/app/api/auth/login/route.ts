@@ -65,10 +65,11 @@ export async function POST(req: NextRequest) {
 
     await setSessionCookie(session);
     return NextResponse.json({ success: true, redirect: '/draft', session });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Login error:', error);
+    const message = error instanceof Error ? error.message : 'Login failed';
     return NextResponse.json(
-      { error: error.message || 'Login failed' },
+      { error: message },
       { status: 500 }
     );
   }

@@ -38,8 +38,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Propose error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to submit proposal' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to submit proposal';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

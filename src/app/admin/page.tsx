@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -17,7 +17,6 @@ import {
   Check,
   X,
   UserCheck,
-  FileSpreadsheet,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { ExcelUploader } from '@/components/ExcelUploader';
@@ -56,7 +55,6 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Add lead form
   const [newEmail, setNewEmail] = useState('');
@@ -83,8 +81,7 @@ export default function AdminPage() {
   // Download loading indicator
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (isBackground = false) => {
-    if (!isBackground) setRefreshing(true);
+  const fetchData = useCallback(async () => {
     try {
       const meRes = await fetch('/api/auth/me');
       if (!meRes.ok) {
@@ -107,13 +104,17 @@ export default function AdminPage() {
       console.error('Admin fetch error:', err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [router]);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => fetchData(true), 5000);
+    const run = async () => {
+      await fetchData();
+    };
+    run();
+    const interval = setInterval(() => {
+      run();
+    }, 5000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -153,8 +154,8 @@ export default function AdminPage() {
       window.URL.revokeObjectURL(downloadUrl);
 
       toast.success(leadName ? `${leadName}'s PDF downloaded` : 'All Teams PDF downloaded');
-    } catch (err: any) {
-      toast.error(err.message || 'Download error');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Download error');
     } finally {
       setDownloadingId(null);
     }
@@ -195,8 +196,8 @@ export default function AdminPage() {
       window.URL.revokeObjectURL(downloadUrl);
 
       toast.success(leadName ? `${leadName}'s Excel downloaded` : 'All Teams Excel downloaded');
-    } catch (err: any) {
-      toast.error(err.message || 'Download error');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Download error');
     } finally {
       setDownloadingId(null);
     }
@@ -218,7 +219,7 @@ export default function AdminPage() {
     router.push(url);
   };
 
-  const handleAddLead = async (e: React.FormEvent) => {
+  const handleAddLead = async (e: FormEvent) => {
     e.preventDefault();
     setLeadError(null);
     setAddingLead(true);
@@ -241,9 +242,9 @@ export default function AdminPage() {
       setNewName('');
       setNewQuota('');
       toast.success('Team lead added successfully');
-      await fetchData(true);
-    } catch (err: any) {
-      setLeadError(err.message || 'Error adding lead');
+      await fetchData();
+    } catch (err: unknown) {
+      setLeadError(err instanceof Error ? err.message : 'Error adding lead');
     } finally {
       setAddingLead(false);
     }
@@ -258,9 +259,9 @@ export default function AdminPage() {
       const res = await fetch(`/api/admin/leads?id=${leadId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete lead');
       toast.success('Lead removed');
-      await fetchData(true);
-    } catch (err: any) {
-      toast.error(err.message);
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete lead');
     }
   };
 
@@ -279,9 +280,9 @@ export default function AdminPage() {
       if (!res.ok) throw new Error('Failed to update quota');
       setEditingLead(null);
       toast.success('Quota updated');
-      await fetchData(true);
-    } catch (err: any) {
-      toast.error(err.message);
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update quota');
     }
   };
 
@@ -296,9 +297,9 @@ export default function AdminPage() {
       });
       if (!res.ok) throw new Error('Failed to update draft status');
       toast.info(nextLocked ? 'Draft paused' : 'Draft resumed');
-      await fetchData(true);
-    } catch (err: any) {
-      toast.error(err.message);
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update draft status');
     }
   };
 
@@ -309,9 +310,9 @@ export default function AdminPage() {
       if (!res.ok) throw new Error('Failed to reset draft');
       setIsResetDialogOpen(false);
       toast.success('All picks have been reset');
-      await fetchData(true);
-    } catch (err: any) {
-      toast.error(err.message);
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reset draft');
     } finally {
       setResetting(false);
     }
@@ -330,7 +331,7 @@ export default function AdminPage() {
     }
 
     toast.success('Candidate released to available pool');
-    await fetchData(true);
+    await fetchData();
     setIsPreviewOpen(false);
   };
 
@@ -347,9 +348,9 @@ export default function AdminPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to process proposal');
 
       toast.success(action === 'approve' ? 'Proposal approved & assigned' : 'Proposal rejected');
-      await fetchData(true);
-    } catch (err: any) {
-      toast.error(err.message);
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to process proposal');
     } finally {
       setProposalActionLoading(null);
     }
@@ -380,7 +381,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50/50 text-zinc-950 flex flex-col">
-      <Navbar user={currentUser} isLocked={draftState?.settings.isLocked} />
+      <Navbar user={currentUser} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Header & Controls */}
@@ -604,7 +605,7 @@ export default function AdminPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ExcelUploader onUploadSuccess={() => fetchData(true)} />
+            <ExcelUploader onUploadSuccess={() => fetchData()} />
           </CardContent>
         </Card>
 
@@ -825,7 +826,7 @@ export default function AdminPage() {
                         onClick={() => handleDownloadPdf(lead.id, lead.name)}
                         className="h-7 text-xs px-2 cursor-pointer"
                       >
-                        <Printer className="w-3 h-3 mr-1" />
+                        <Printer className="w-3.5 h-3.5 mr-1" />
                         <span>{downloadingId === `pdf_${lead.id}` ? '...' : 'PDF'}</span>
                       </Button>
                     </div>

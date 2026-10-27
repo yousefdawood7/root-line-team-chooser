@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Printer, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Candidate, DraftState, Lead } from '@/lib/types';
+import { DraftState } from '@/lib/types';
 
 function PrintContent() {
   const router = useRouter();

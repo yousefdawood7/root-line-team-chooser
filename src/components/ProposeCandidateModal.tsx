@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { X, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +37,7 @@ export function ProposeCandidateModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -81,8 +81,8 @@ export function ProposeCandidateModal({
         onSuccess();
         onClose();
       }, 1200);
-    } catch (err: any) {
-      setError(err.message || 'Error submitting proposal');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error submitting proposal');
     } finally {
       setLoading(false);
     }

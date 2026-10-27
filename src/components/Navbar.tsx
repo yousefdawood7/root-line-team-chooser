@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -12,10 +11,9 @@ import { Badge } from '@/components/ui/badge';
 interface NavbarProps {
   user?: UserSession | null;
   lead?: Lead | null;
-  isLocked?: boolean;
 }
 
-export function Navbar({ user, lead, isLocked }: NavbarProps) {
+export function Navbar({ user, lead }: NavbarProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -25,7 +23,7 @@ export function Navbar({ user, lead, isLocked }: NavbarProps) {
       router.refresh();
     } catch (e) {
       console.error('Logout error:', e);
-      window.location.href = '/login';
+      router.push('/login');
     }
   };
 

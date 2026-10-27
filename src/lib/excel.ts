@@ -17,11 +17,11 @@ export function parseCandidateFile(
   filename: string
 ): Candidate[] {
   const isCsv = filename.toLowerCase().endsWith('.csv');
-  let rows: Record<string, any>[] = [];
+  let rows: Record<string, unknown>[] = [];
 
   if (isCsv) {
     const text = Buffer.from(buffer).toString('utf-8');
-    const parsed = Papa.parse<Record<string, any>>(text, {
+    const parsed = Papa.parse<Record<string, unknown>>(text, {
       header: true,
       skipEmptyLines: true,
       transformHeader: (h) => h.trim(),
@@ -31,7 +31,7 @@ export function parseCandidateFile(
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
-    rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
   }
 
   return rows
@@ -117,7 +117,7 @@ export function generateExportWorkbook(
     ? candidates.filter((c) => c.assignedToLeadId === targetLead.id)
     : candidates;
 
-  let exportRows: Record<string, any>[] = [];
+  let exportRows: Record<string, unknown>[] = [];
 
   if (targetCandidates.length === 0) {
     exportRows = [

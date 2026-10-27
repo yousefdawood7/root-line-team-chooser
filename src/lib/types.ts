@@ -19,7 +19,7 @@ export interface Candidate {
   experience?: string;
   skills?: string[];
   notes?: string;
-  rawDetails: Record<string, any>;
+  rawDetails: Record<string, unknown>;
   assignedToLeadId?: string | null;
   assignedToLeadName?: string | null;
   assignedToLeadEmail?: string | null;

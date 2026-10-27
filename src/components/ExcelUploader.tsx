@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import { useState, useRef, type DragEvent } from 'react';
 import { FileSpreadsheet, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ExcelUploaderProps {
-  onUploadSuccess: (data: any) => void;
+  onUploadSuccess: (data: unknown) => void;
 }
 
 export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
@@ -44,14 +44,14 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
 
       setSuccessMsg(`Successfully imported ${data.count} candidates.`);
       onUploadSuccess(data);
-    } catch (err: any) {
-      setError(err.message || 'Error uploading file');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error uploading file');
     } finally {
       setLoading(false);
     }
   };
 
-  const onDragOver = (e: React.DragEvent) => {
+  const onDragOver = (e: DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
   };
@@ -60,7 +60,7 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
     setIsDragging(false);
   };
 
-  const onDrop = (e: React.DragEvent) => {
+  const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {

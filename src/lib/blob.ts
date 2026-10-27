@@ -52,13 +52,13 @@ function safeEnsureLocalDir(): boolean {
       fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
     }
     return true;
-  } catch (e) {
+  } catch {
     // Read-only filesystem (e.g. Vercel serverless environment)
     return false;
   }
 }
 
-let stateLock: Promise<any> = Promise.resolve();
+let stateLock: Promise<unknown> = Promise.resolve();
 
 async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   const nextLock = stateLock.then(() => fn(), () => fn());
@@ -106,8 +106,8 @@ export async function getDraftState(): Promise<DraftState> {
       }
       fs.writeFileSync(LOCAL_STATE_FILE, JSON.stringify(INITIAL_STATE, null, 2), 'utf-8');
       return INITIAL_STATE;
-    } catch (e) {
-      console.warn('Filesystem access failed, using memory state:', e);
+    } catch {
+      console.warn('Filesystem access failed, using memory state');
     }
   }
 
@@ -139,8 +139,8 @@ export async function saveDraftState(state: DraftState): Promise<void> {
   if (safeEnsureLocalDir()) {
     try {
       fs.writeFileSync(LOCAL_STATE_FILE, jsonContent, 'utf-8');
-    } catch (e) {
-      console.warn('Could not write to local filesystem, state kept in memory:', e);
+    } catch {
+      console.warn('Could not write to local filesystem, state kept in memory');
     }
   }
 }

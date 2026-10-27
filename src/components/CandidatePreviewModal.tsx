@@ -1,11 +1,10 @@
 'use client';
 
-import React from 'react';
-import { X, Briefcase, Mail, Phone, Award, Building, CheckCircle2, Lock, AlertCircle, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { X, CheckCircle2, Lock, AlertCircle, Trash2 } from 'lucide-react';
 import { Candidate, Lead, UserSession } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 
 interface CandidatePreviewModalProps {
   candidate: Candidate | null;
@@ -28,8 +27,8 @@ export function CandidatePreviewModal({
   onRelease,
   isDraftLocked,
 }: CandidatePreviewModalProps) {
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !candidate) return null;
 
@@ -50,8 +49,8 @@ export function CandidatePreviewModal({
       setLoading(true);
       setError(null);
       await onPick(candidate.id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to pick candidate');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to pick candidate');
     } finally {
       setLoading(false);
     }
@@ -65,8 +64,8 @@ export function CandidatePreviewModal({
       setLoading(true);
       setError(null);
       await onRelease(candidate.id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to release candidate');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to release candidate');
     } finally {
       setLoading(false);
     }
@@ -175,7 +174,7 @@ export function CandidatePreviewModal({
             {candidate.email && (
               <div className="p-3 rounded-lg border border-zinc-200 bg-white">
                 <span className="text-zinc-400 font-medium block text-[11px] uppercase">Email</span>
-                <span className="font-medium text-zinc-900 truncate block mt-0.5">{candidate.email}</span>
+                <span className="font-medium text-zinc-900 block mt-0.5 break-all">{candidate.email}</span>
               </div>
             )}
             {candidate.phone && (

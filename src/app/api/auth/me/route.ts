@@ -26,8 +26,9 @@ export async function GET() {
       user: session,
       lead: currentLead || null,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in /api/auth/me:', err);
-    return NextResponse.json({ authenticated: false, error: err.message }, { status: 200 });
+    const message = err instanceof Error ? err.message : 'Auth verification error';
+    return NextResponse.json({ authenticated: false, error: message }, { status: 200 });
   }
 }

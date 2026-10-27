@@ -37,8 +37,9 @@ export async function POST(req: NextRequest) {
       settings: updatedState.settings,
       leads: updatedState.leads,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('File upload error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to process file' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to process file';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

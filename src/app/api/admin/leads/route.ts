@@ -35,8 +35,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, leads: updatedState.leads });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to update lead' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update lead';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -56,7 +57,8 @@ export async function DELETE(req: NextRequest) {
 
     const updatedState = await removeLead(leadId);
     return NextResponse.json({ success: true, leads: updatedState.leads });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to delete lead' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to delete lead';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

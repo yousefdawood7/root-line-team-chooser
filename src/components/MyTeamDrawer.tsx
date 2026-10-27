@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { X, Users, User, ArrowRight, Trash2, Mail, Phone } from 'lucide-react';
+import { X, User, ArrowRight, Trash2, Mail, Phone } from 'lucide-react';
 import { Candidate, Lead } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
