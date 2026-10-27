@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { X, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { DraftState } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +16,7 @@ import {
 interface ProposeCandidateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (updatedState?: DraftState) => void;
 }
 
 export function ProposeCandidateModal({
@@ -78,7 +79,7 @@ export function ProposeCandidateModal({
         setPhone('');
         setSkills('');
         setNotes('');
-        onSuccess();
+        onSuccess(data.state);
         onClose();
       }, 1200);
     } catch (err: unknown) {

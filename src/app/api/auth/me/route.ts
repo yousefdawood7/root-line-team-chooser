@@ -3,12 +3,23 @@ import { getSession } from '@/lib/auth';
 import { getDraftState } from '@/lib/blob';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
     const session = await getSession();
     if (!session || !session.email) {
-      return NextResponse.json({ authenticated: false }, { status: 200 });
+      return NextResponse.json(
+        { authenticated: false },
+        {
+          status: 200,
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        }
+      );
     }
 
     const state = await getDraftState();
@@ -21,14 +32,33 @@ export async function GET() {
           )
         : null;
 
-    return NextResponse.json({
-      authenticated: true,
-      user: session,
-      lead: currentLead || null,
-    });
+    return NextResponse.json(
+      {
+        authenticated: true,
+        user: session,
+        lead: currentLead || null,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (err: unknown) {
     console.error('Error in /api/auth/me:', err);
     const message = err instanceof Error ? err.message : 'Auth verification error';
-    return NextResponse.json({ authenticated: false, error: message }, { status: 200 });
+    return NextResponse.json(
+      { authenticated: false, error: message },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   }
 }

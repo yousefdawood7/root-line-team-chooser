@@ -5,6 +5,13 @@ import { importCandidates } from '@/lib/blob';
 import { ColumnMapping } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -49,15 +56,19 @@ export async function POST(req: NextRequest) {
       sessionTitle || undefined
     );
 
-    return NextResponse.json({
-      success: true,
-      count: candidates.length,
-      settings: updatedState.settings,
-      leads: updatedState.leads,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        count: candidates.length,
+        settings: updatedState.settings,
+        leads: updatedState.leads,
+        state: updatedState,
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: unknown) {
     console.error('File upload error:', error);
     const message = error instanceof Error ? error.message : 'Failed to process file';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

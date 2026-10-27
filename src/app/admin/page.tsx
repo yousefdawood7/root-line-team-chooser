@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useReducer, useEffect, useCallback, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { useReducer, useEffect, useCallback, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Download,
   RotateCcw,
@@ -23,23 +23,24 @@ import {
   Wand2,
   Info,
   ShieldAlert,
-} from 'lucide-react';
-import { Navbar } from '@/components/Navbar';
-import { ExcelUploader } from '@/components/ExcelUploader';
-import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
-import { CandidateEditModal } from '@/components/CandidateEditModal';
-import { adminReducer, initialAdminState } from '@/reducers/adminReducer';
-import { getQuotaProjection } from '@/lib/quota';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+} from "lucide-react";
+import { Navbar } from "@/components/Navbar";
+import { ExcelUploader } from "@/components/ExcelUploader";
+import { CandidatePreviewModal } from "@/components/CandidatePreviewModal";
+import { CandidateEditModal } from "@/components/CandidateEditModal";
+import { adminReducer, initialAdminState } from "@/reducers/adminReducer";
+import { DraftState } from "@/lib/types";
+import { getQuotaProjection } from "@/lib/quota";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -47,8 +48,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Progress } from '@/components/ui/progress';
+} from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -56,7 +57,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -93,30 +94,40 @@ export default function AdminPage() {
     isPreviewOpen,
     proposalActionLoading,
     downloadingId,
+    storageStatus,
   } = state;
 
   const fetchData = useCallback(async () => {
     try {
-      const meRes = await fetch('/api/auth/me');
+      const [meRes, stateRes, storageRes] = await Promise.all([
+        fetch("/api/auth/me", { cache: "no-store" }),
+        fetch("/api/draft/state", { cache: "no-store" }),
+        fetch("/api/admin/storage-status", { cache: "no-store" }),
+      ]);
+
       if (!meRes.ok) {
-        router.push('/login');
+        router.push("/login");
         return;
       }
       const meData = await meRes.json();
-      if (!meData.authenticated || meData.user?.role !== 'admin') {
-        router.push('/login');
+      if (!meData.authenticated || meData.user?.role !== "admin") {
+        router.push("/login");
         return;
       }
 
-      const stateRes = await fetch('/api/draft/state');
       if (stateRes.ok) {
         const data = await stateRes.json();
-        dispatch({ type: 'SET_LOAD_DATA', user: meData.user, state: data });
+        dispatch({ type: "SET_LOAD_DATA", user: meData.user, state: data });
+      }
+
+      if (storageRes.ok) {
+        const storageData = await storageRes.json();
+        dispatch({ type: "SET_STORAGE_STATUS", status: storageData });
       }
     } catch (err) {
-      console.error('Admin fetch error:', err);
+      console.error("Admin fetch error:", err);
     } finally {
-      dispatch({ type: 'SET_LOADING', loading: false });
+      dispatch({ type: "SET_LOADING", loading: false });
     }
   }, [router]);
 
@@ -137,40 +148,47 @@ export default function AdminPage() {
 
     // Check if data exists
     const candidatesToExport = leadId
-      ? draftState.candidates.filter((c) => c.assignedToLeadId === leadId && c.approvalStatus !== 'pending')
-      : draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+      ? draftState.candidates.filter(
+          (c) =>
+            c.assignedToLeadId === leadId && c.approvalStatus !== "pending",
+        )
+      : draftState.candidates.filter((c) => c.approvalStatus !== "pending");
 
     if (candidatesToExport.length === 0) {
       toast.error(
         leadName
           ? `No candidates in ${leadName}'s squad to export.`
-          : 'No candidates available to export yet.'
+          : "No candidates available to export yet.",
       );
       return;
     }
 
     try {
-      dispatch({ type: 'SET_DOWNLOADING_ID', id: `pdf_${leadId || 'all'}` });
-      const url = leadId ? `/api/admin/pdf?leadId=${leadId}` : '/api/admin/pdf';
+      dispatch({ type: "SET_DOWNLOADING_ID", id: `pdf_${leadId || "all"}` });
+      const url = leadId ? `/api/admin/pdf?leadId=${leadId}` : "/api/admin/pdf";
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to download PDF');
+      if (!res.ok) throw new Error("Failed to download PDF");
 
       const blob = await res.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = downloadUrl;
-      const targetName = leadName ? leadName.replace(/[^a-zA-Z0-9_-]/g, '_') : 'All_Teams';
+      const targetName = leadName
+        ? leadName.replace(/[^a-zA-Z0-9_-]/g, "_")
+        : "All_Teams";
       link.download = `RootLine_Team_${targetName}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
 
-      toast.success(leadName ? `${leadName}'s PDF downloaded` : 'All Teams PDF downloaded');
+      toast.success(
+        leadName ? `${leadName}'s PDF downloaded` : "All Teams PDF downloaded",
+      );
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Download error');
+      toast.error(err instanceof Error ? err.message : "Download error");
     } finally {
-      dispatch({ type: 'SET_DOWNLOADING_ID', id: null });
+      dispatch({ type: "SET_DOWNLOADING_ID", id: null });
     }
   };
 
@@ -179,40 +197,51 @@ export default function AdminPage() {
     if (!draftState) return;
 
     const candidatesToExport = leadId
-      ? draftState.candidates.filter((c) => c.assignedToLeadId === leadId && c.approvalStatus !== 'pending')
-      : draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+      ? draftState.candidates.filter(
+          (c) =>
+            c.assignedToLeadId === leadId && c.approvalStatus !== "pending",
+        )
+      : draftState.candidates.filter((c) => c.approvalStatus !== "pending");
 
     if (candidatesToExport.length === 0) {
       toast.error(
         leadName
           ? `No candidates in ${leadName}'s squad to export.`
-          : 'No candidates available to export yet.'
+          : "No candidates available to export yet.",
       );
       return;
     }
 
     try {
-      dispatch({ type: 'SET_DOWNLOADING_ID', id: `xlsx_${leadId || 'all'}` });
-      const url = leadId ? `/api/admin/export?leadId=${leadId}` : '/api/admin/export';
+      dispatch({ type: "SET_DOWNLOADING_ID", id: `xlsx_${leadId || "all"}` });
+      const url = leadId
+        ? `/api/admin/export?leadId=${leadId}`
+        : "/api/admin/export";
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to download Excel');
+      if (!res.ok) throw new Error("Failed to download Excel");
 
       const blob = await res.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = downloadUrl;
-      const targetName = leadName ? leadName.replace(/[^a-zA-Z0-9_-]/g, '_') : 'All_Teams';
+      const targetName = leadName
+        ? leadName.replace(/[^a-zA-Z0-9_-]/g, "_")
+        : "All_Teams";
       link.download = `RootLine_Team_${targetName}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
 
-      toast.success(leadName ? `${leadName}'s Excel downloaded` : 'All Teams Excel downloaded');
+      toast.success(
+        leadName
+          ? `${leadName}'s Excel downloaded`
+          : "All Teams Excel downloaded",
+      );
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Download error');
+      toast.error(err instanceof Error ? err.message : "Download error");
     } finally {
-      dispatch({ type: 'SET_DOWNLOADING_ID', id: null });
+      dispatch({ type: "SET_DOWNLOADING_ID", id: null });
     }
   };
 
@@ -220,44 +249,53 @@ export default function AdminPage() {
   const handlePrintNavigation = (leadId?: string) => {
     if (!draftState) return;
     const candidatesToPrint = leadId
-      ? draftState.candidates.filter((c) => c.assignedToLeadId === leadId && c.approvalStatus !== 'pending')
-      : draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+      ? draftState.candidates.filter(
+          (c) =>
+            c.assignedToLeadId === leadId && c.approvalStatus !== "pending",
+        )
+      : draftState.candidates.filter((c) => c.approvalStatus !== "pending");
 
     if (candidatesToPrint.length === 0) {
-      toast.error('No candidate data to print.');
+      toast.error("No candidate data to print.");
       return;
     }
 
-    const url = leadId ? `/admin/print?leadId=${leadId}` : '/admin/print';
+    const url = leadId ? `/admin/print?leadId=${leadId}` : "/admin/print";
     router.push(url);
   };
 
   const handleSaveTitle = async () => {
     if (!titleInputVal.trim()) return;
     try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: titleInputVal.trim() }),
       });
-      if (!res.ok) throw new Error('Failed to update session title');
-      dispatch({ type: 'CANCEL_EDIT_TITLE' });
-      toast.success('Session title updated');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update session title");
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      dispatch({ type: "CANCEL_EDIT_TITLE" });
+      toast.success("Session title updated");
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update title');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update title",
+      );
     }
   };
 
   const handleAddLead = async (e: FormEvent) => {
     e.preventDefault();
-    dispatch({ type: 'SET_LEAD_ERROR', error: null });
-    dispatch({ type: 'SET_ADDING_LEAD', adding: true });
+    dispatch({ type: "SET_LEAD_ERROR", error: null });
+    dispatch({ type: "SET_ADDING_LEAD", adding: true });
 
     try {
-      const res = await fetch('/api/admin/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/admin/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: newEmail,
           name: newName,
@@ -266,15 +304,21 @@ export default function AdminPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to add lead');
+      if (!res.ok) throw new Error(data.error || "Failed to add lead");
 
-      dispatch({ type: 'RESET_NEW_LEAD_FORM' });
-      toast.success('Team lead added successfully');
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      dispatch({ type: "RESET_NEW_LEAD_FORM" });
+      toast.success("Team lead added successfully");
       await fetchData();
     } catch (err: unknown) {
-      dispatch({ type: 'SET_LEAD_ERROR', error: err instanceof Error ? err.message : 'Error adding lead' });
+      dispatch({
+        type: "SET_LEAD_ERROR",
+        error: err instanceof Error ? err.message : "Error adding lead",
+      });
     } finally {
-      dispatch({ type: 'SET_ADDING_LEAD', adding: false });
+      dispatch({ type: "SET_ADDING_LEAD", adding: false });
     }
   };
 
@@ -282,16 +326,22 @@ export default function AdminPage() {
     if (!leadToDelete) return;
 
     try {
-      dispatch({ type: 'SET_DELETING_LEAD', deleting: true });
-      const res = await fetch(`/api/admin/leads?id=${leadToDelete.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete lead');
+      dispatch({ type: "SET_DELETING_LEAD", deleting: true });
+      const res = await fetch(`/api/admin/leads?id=${leadToDelete.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete lead");
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
       toast.success(`Removed team lead "${leadToDelete.name}"`);
-      dispatch({ type: 'CLOSE_DELETE_LEAD_DIALOG' });
+      dispatch({ type: "CLOSE_DELETE_LEAD_DIALOG" });
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete lead');
+      toast.error(err instanceof Error ? err.message : "Failed to delete lead");
     } finally {
-      dispatch({ type: 'SET_DELETING_LEAD', deleting: false });
+      dispatch({ type: "SET_DELETING_LEAD", deleting: false });
     }
   };
 
@@ -299,37 +349,52 @@ export default function AdminPage() {
     if (!candidateToDelete) return;
 
     try {
-      dispatch({ type: 'SET_DELETING_CANDIDATE', deleting: true });
-      const res = await fetch(`/api/admin/candidates?id=${candidateToDelete.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete candidate');
+      dispatch({ type: "SET_DELETING_CANDIDATE", deleting: true });
+      const res = await fetch(
+        `/api/admin/candidates?id=${candidateToDelete.id}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete candidate");
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
       toast.success(`Deleted candidate "${candidateToDelete.name}"`);
-      dispatch({ type: 'CLOSE_DELETE_CANDIDATE_DIALOG' });
+      dispatch({ type: "CLOSE_DELETE_CANDIDATE_DIALOG" });
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete candidate');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete candidate",
+      );
     } finally {
-      dispatch({ type: 'SET_DELETING_CANDIDATE', deleting: false });
+      dispatch({ type: "SET_DELETING_CANDIDATE", deleting: false });
     }
   };
 
   const handleUpdateQuota = async () => {
     if (!editingLead) return;
     try {
-      const res = await fetch('/api/admin/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/admin/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: editingLead.email,
           name: editingLead.name,
-          customQuota: editQuotaVal === '' ? null : Number(editQuotaVal),
+          customQuota: editQuotaVal === "" ? null : Number(editQuotaVal),
         }),
       });
-      if (!res.ok) throw new Error('Failed to update quota');
-      dispatch({ type: 'CLOSE_EDIT_QUOTA' });
-      toast.success('Quota updated');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update quota");
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      dispatch({ type: "CLOSE_EDIT_QUOTA" });
+      toast.success("Quota updated");
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update quota');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update quota",
+      );
     }
   };
 
@@ -337,86 +402,119 @@ export default function AdminPage() {
     if (!draftState) return;
     try {
       const nextLocked = !draftState.settings.isLocked;
-      const res = await fetch('/api/admin/lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/admin/lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isLocked: nextLocked }),
       });
-      if (!res.ok) throw new Error('Failed to update draft status');
-      toast.info(nextLocked ? 'Draft paused' : 'Draft resumed');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update draft status");
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      toast.info(nextLocked ? "Draft paused" : "Draft resumed");
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update draft status');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update draft status",
+      );
     }
   };
 
   const confirmResetDraft = async () => {
     try {
-      dispatch({ type: 'SET_RESETTING', resetting: true });
-      const res = await fetch('/api/admin/reset', { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to reset draft');
-      dispatch({ type: 'CLOSE_RESET_DIALOG' });
-      toast.success('All picks have been reset');
+      dispatch({ type: "SET_RESETTING", resetting: true });
+      const res = await fetch("/api/admin/reset", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reset draft");
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      dispatch({ type: "CLOSE_RESET_DIALOG" });
+      toast.success("All picks have been reset");
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reset draft');
+      toast.error(err instanceof Error ? err.message : "Failed to reset draft");
     } finally {
-      dispatch({ type: 'SET_RESETTING', resetting: false });
+      dispatch({ type: "SET_RESETTING", resetting: false });
     }
   };
 
   const handleAdminReleaseCandidate = async (candidateId: string) => {
-    const res = await fetch('/api/draft/release', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/draft/release", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ candidateId }),
     });
 
+    const d = await res.json();
     if (!res.ok) {
-      const d = await res.json();
-      throw new Error(d.error || 'Failed to release');
+      throw new Error(d.error || "Failed to release");
     }
 
-    toast.success('Candidate released to available pool');
+    if (d.state) {
+      dispatch({ type: "SET_DRAFT_STATE", state: d.state });
+    }
+    toast.success("Candidate released to available pool");
     await fetchData();
-    dispatch({ type: 'CLOSE_PREVIEW' });
+    dispatch({ type: "CLOSE_PREVIEW" });
   };
 
   const handleAutoDistributePool = async () => {
     try {
-      dispatch({ type: 'SET_AUTO_ASSIGNING', assigning: true });
-      const res = await fetch('/api/admin/auto-assign', { method: 'POST' });
+      dispatch({ type: "SET_AUTO_ASSIGNING", assigning: true });
+      const res = await fetch("/api/admin/auto-assign", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to auto-distribute candidates');
+      if (!res.ok)
+        throw new Error(data.error || "Failed to auto-distribute candidates");
 
-      toast.success(`Successfully auto-assigned ${data.assignedCount} candidate(s) evenly across teams.`);
-      dispatch({ type: 'CLOSE_AUTO_ASSIGN_DIALOG' });
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      toast.success(
+        `Successfully auto-assigned ${data.assignedCount} candidate(s) evenly across teams.`,
+      );
+      dispatch({ type: "CLOSE_AUTO_ASSIGN_DIALOG" });
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Auto-distribution failed');
+      toast.error(
+        err instanceof Error ? err.message : "Auto-distribution failed",
+      );
     } finally {
-      dispatch({ type: 'SET_AUTO_ASSIGNING', assigning: false });
+      dispatch({ type: "SET_AUTO_ASSIGNING", assigning: false });
     }
   };
 
-  const handleProcessProposal = async (candidateId: string, action: 'approve' | 'reject') => {
+  const handleProcessProposal = async (
+    candidateId: string,
+    action: "approve" | "reject",
+  ) => {
     try {
-      dispatch({ type: 'SET_PROPOSAL_LOADING', id: candidateId });
-      const res = await fetch('/api/admin/proposals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      dispatch({ type: "SET_PROPOSAL_LOADING", id: candidateId });
+      const res = await fetch("/api/admin/proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ candidateId, action }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to process proposal');
+      if (!res.ok) throw new Error(data.error || "Failed to process proposal");
 
-      toast.success(action === 'approve' ? 'Proposal approved & assigned' : 'Proposal rejected');
+      if (data.state) {
+        dispatch({ type: "SET_DRAFT_STATE", state: data.state });
+      }
+      toast.success(
+        action === "approve"
+          ? "Proposal approved & assigned"
+          : "Proposal rejected",
+      );
       await fetchData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to process proposal');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to process proposal",
+      );
     } finally {
-      dispatch({ type: 'SET_PROPOSAL_LOADING', id: null });
+      dispatch({ type: "SET_PROPOSAL_LOADING", id: null });
     }
   };
 
@@ -431,26 +529,36 @@ export default function AdminPage() {
     );
   }
 
-  const pendingProposals = draftState?.candidates.filter(
-    (c) => c.approvalStatus === 'pending'
-  ) || [];
+  const pendingProposals =
+    draftState?.candidates.filter((c) => c.approvalStatus === "pending") || [];
 
-  const approvedCandidates = draftState?.candidates.filter(
-    (c) => c.approvalStatus !== 'pending'
-  ) || [];
+  const approvedCandidates =
+    draftState?.candidates.filter((c) => c.approvalStatus !== "pending") || [];
 
   const totalCandidates = approvedCandidates.length;
-  const pickedCandidates = approvedCandidates.filter((c) => c.assignedToLeadId).length;
+  const pickedCandidates = approvedCandidates.filter(
+    (c) => c.assignedToLeadId,
+  ).length;
   const availableCandidates = totalCandidates - pickedCandidates;
 
   // Real-time automatic quota calculation & late lead projection
-  const currentProjection = getQuotaProjection(draftState?.leads || [], draftState?.candidates || [], false);
-  const nextLeadProjection = getQuotaProjection(draftState?.leads || [], draftState?.candidates || [], true);
+  const currentProjection = getQuotaProjection(
+    draftState?.leads || [],
+    draftState?.candidates || [],
+    false,
+  );
+  const nextLeadProjection = getQuotaProjection(
+    draftState?.leads || [],
+    draftState?.candidates || [],
+    true,
+  );
 
   // Filtered candidate list for management table
   const filteredCandidates = approvedCandidates.filter((c) => {
-    if (candidateFilterStatus === 'assigned' && !c.assignedToLeadId) return false;
-    if (candidateFilterStatus === 'available' && c.assignedToLeadId) return false;
+    if (candidateFilterStatus === "assigned" && !c.assignedToLeadId)
+      return false;
+    if (candidateFilterStatus === "available" && c.assignedToLeadId)
+      return false;
 
     if (candidateSearchQuery.trim()) {
       const q = candidateSearchQuery.toLowerCase();
@@ -477,17 +585,23 @@ export default function AdminPage() {
                   <Input
                     type="text"
                     value={titleInputVal}
-                    onChange={(e) => dispatch({ type: 'SET_TITLE_INPUT', val: e.target.value })}
+                    onChange={(e) =>
+                      dispatch({ type: "SET_TITLE_INPUT", val: e.target.value })
+                    }
                     className="h-8 text-sm font-bold max-w-xs bg-white"
                     autoFocus
                   />
-                  <Button size="sm" onClick={handleSaveTitle} className="h-8 text-xs px-2.5">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveTitle}
+                    className="h-8 text-xs px-2.5"
+                  >
                     <Check className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => dispatch({ type: 'CANCEL_EDIT_TITLE' })}
+                    onClick={() => dispatch({ type: "CANCEL_EDIT_TITLE" })}
                     className="h-8 text-xs px-2"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -496,15 +610,16 @@ export default function AdminPage() {
               ) : (
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-                    {draftState?.settings.title || 'Admin Dashboard'}
+                    {draftState?.settings.title || "Admin Dashboard"}
                   </h1>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => {
                       dispatch({
-                        type: 'START_EDIT_TITLE',
-                        currentTitle: draftState?.settings.title || 'Rootline Team Draft',
+                        type: "START_EDIT_TITLE",
+                        currentTitle:
+                          draftState?.settings.title || "Rootline Team Draft",
                       });
                     }}
                     title="Edit session title"
@@ -515,16 +630,46 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Manage authorized leads, review member proposals, modify draft board candidates, and export rosters.
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <p className="text-xs text-zinc-500">
+                Manage authorized leads, review member proposals, modify draft
+                board candidates, and export rosters.
+              </p>
+              {storageStatus?.backend === "vercel_blob" && storageStatus.isConnected && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Vercel Blob Active (rootline_state_v1.json)
+                </span>
+              )}
+              {storageStatus?.backend === "vercel_blob" && !storageStatus.isConnected && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                  Vercel Blob Error: {storageStatus.error || "Connection Failed"}
+                </span>
+              )}
+              {storageStatus?.backend === "local_file" && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  Local Storage (.data/state.json)
+                </span>
+              )}
+              {storageStatus?.backend === "memory" && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-700 border border-red-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                  Ephemeral Memory (Blob Token Missing)
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               onClick={() => {
-                dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: null });
+                dispatch({
+                  type: "OPEN_CANDIDATE_EDIT_MODAL",
+                  candidate: null,
+                });
               }}
               className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800"
             >
@@ -535,8 +680,8 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => dispatch({ type: 'OPEN_AUTO_ASSIGN_DIALOG' })}
-              className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800"
+              onClick={() => dispatch({ type: "OPEN_AUTO_ASSIGN_DIALOG" })}
+              className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white"
             >
               <Wand2 className="w-3.5 h-3.5" />
               <span>Auto-Assign Pool</span>
@@ -562,23 +707,31 @@ export default function AdminPage() {
             <Button
               size="sm"
               variant="default"
-              disabled={downloadingId === 'xlsx_all'}
+              disabled={downloadingId === "xlsx_all"}
               onClick={() => handleDownloadExcel()}
               className="flex items-center gap-1.5 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>{downloadingId === 'xlsx_all' ? 'Exporting...' : 'Export All (Excel)'}</span>
+              <span>
+                {downloadingId === "xlsx_all"
+                  ? "Exporting..."
+                  : "Export All (Excel)"}
+              </span>
             </Button>
 
             <Button
               size="sm"
               variant="outline"
-              disabled={downloadingId === 'pdf_all'}
+              disabled={downloadingId === "pdf_all"}
               onClick={() => handleDownloadPdf()}
               className="flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>{downloadingId === 'pdf_all' ? 'Generating...' : 'Download All (PDF)'}</span>
+              <span>
+                {downloadingId === "pdf_all"
+                  ? "Generating..."
+                  : "Download All (PDF)"}
+              </span>
             </Button>
 
             <Button
@@ -593,13 +746,29 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => dispatch({ type: 'OPEN_RESET_DIALOG' })}
+              onClick={() => dispatch({ type: "OPEN_RESET_DIALOG" })}
               className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset All
             </Button>
           </div>
         </div>
+
+        {/* Ephemeral In-Memory Warning if Vercel Blob Token is missing */}
+        {storageStatus && !storageStatus.hasToken && storageStatus.backend === "memory" && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-900 space-y-1">
+              <p className="font-semibold text-sm">Vercel Blob Storage is not connected to this deployment</p>
+              <p>
+                Your application is currently running in temporary serverless memory. Any data you add (leads, candidates, picks) will not persist across serverless lambdas.
+              </p>
+              <p className="font-mono text-[11px] bg-amber-100/70 p-1.5 rounded text-amber-950">
+                To enable persistent cloud storage: In your <strong>Vercel Dashboard</strong> ➔ <strong>Storage</strong> ➔ <strong>Create/Connect Store</strong> ➔ <strong>Blob</strong> ➔ Connect to <strong>root-line-team-chooser</strong>.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -610,9 +779,11 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <p className="text-2xl font-bold text-zinc-900">{totalCandidates}</p>
+              <p className="text-2xl font-bold text-zinc-900">
+                {totalCandidates}
+              </p>
               <p className="text-[11px] text-zinc-400 truncate mt-0.5">
-                {draftState?.settings.uploadedFileName || 'No file uploaded'}
+                {draftState?.settings.uploadedFileName || "No file uploaded"}
               </p>
             </CardContent>
           </Card>
@@ -626,10 +797,17 @@ export default function AdminPage() {
             <CardContent className="p-4 pt-0">
               <p className="text-2xl font-bold text-zinc-900">
                 {currentProjection.autoQuota}
-                {currentProjection.remainder > 0 && <span className="text-sm font-normal text-zinc-500"> (+1 rem)</span>}
+                {currentProjection.remainder > 0 && (
+                  <span className="text-sm font-normal text-zinc-500">
+                    {" "}
+                    (+1 rem)
+                  </span>
+                )}
               </p>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                {currentProjection.leadCount > 0 ? `Across ${currentProjection.leadCount} registered lead(s)` : 'No leads registered'}
+                {currentProjection.leadCount > 0
+                  ? `Across ${currentProjection.leadCount} registered lead(s)`
+                  : "No leads registered"}
               </p>
             </CardContent>
           </Card>
@@ -641,9 +819,13 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <p className="text-2xl font-bold text-zinc-900">{pickedCandidates}</p>
+              <p className="text-2xl font-bold text-zinc-900">
+                {pickedCandidates}
+              </p>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                {totalCandidates > 0 ? `${Math.round((pickedCandidates / totalCandidates) * 100)}% of total` : '0%'}
+                {totalCandidates > 0
+                  ? `${Math.round((pickedCandidates / totalCandidates) * 100)}% of total`
+                  : "0%"}
               </p>
             </CardContent>
           </Card>
@@ -655,8 +837,12 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <p className="text-2xl font-bold text-zinc-900">{availableCandidates}</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Unassigned pool</p>
+              <p className="text-2xl font-bold text-zinc-900">
+                {availableCandidates}
+              </p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Unassigned pool
+              </p>
             </CardContent>
           </Card>
 
@@ -667,8 +853,12 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <p className="text-2xl font-bold text-zinc-900">{pendingProposals.length}</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Awaiting review</p>
+              <p className="text-2xl font-bold text-zinc-900">
+                {pendingProposals.length}
+              </p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Awaiting review
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -684,7 +874,8 @@ export default function AdminPage() {
                     Pending Candidate Proposals ({pendingProposals.length})
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Custom candidates proposed by team leads outside the spreadsheet. Approving assigns them directly to that lead.
+                    Custom candidates proposed by team leads outside the
+                    spreadsheet. Approving assigns them directly to that lead.
                   </CardDescription>
                 </div>
                 <Badge variant="default" className="text-xs">
@@ -698,7 +889,10 @@ export default function AdminPage() {
                 {pendingProposals.map((proposal) => {
                   const isProcessing = proposalActionLoading === proposal.id;
                   return (
-                    <div key={proposal.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div
+                      key={proposal.id}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-bold text-zinc-900">
@@ -710,21 +904,38 @@ export default function AdminPage() {
                             </Badge>
                           )}
                           {proposal.department && (
-                            <Badge variant="outline" className="text-[11px] text-zinc-500">
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] text-zinc-500"
+                            >
                               {proposal.department}
                             </Badge>
                           )}
                         </div>
 
                         <p className="text-xs text-zinc-500">
-                          Proposed by: <strong className="text-zinc-800">{proposal.proposedByLeadName}</strong> ({proposal.proposedByLeadEmail})
+                          Proposed by:{" "}
+                          <strong className="text-zinc-800">
+                            {proposal.proposedByLeadName}
+                          </strong>{" "}
+                          ({proposal.proposedByLeadEmail})
                         </p>
 
-                        {(proposal.email || proposal.phone || proposal.notes) && (
+                        {(proposal.email ||
+                          proposal.phone ||
+                          proposal.notes) && (
                           <div className="text-xs text-zinc-600 mt-1 space-x-3">
-                            {proposal.email && <span>Email: {proposal.email}</span>}
-                            {proposal.phone && <span>Phone: {proposal.phone}</span>}
-                            {proposal.notes && <span className="italic">Note: &ldquo;{proposal.notes}&rdquo;</span>}
+                            {proposal.email && (
+                              <span>Email: {proposal.email}</span>
+                            )}
+                            {proposal.phone && (
+                              <span>Phone: {proposal.phone}</span>
+                            )}
+                            {proposal.notes && (
+                              <span className="italic">
+                                Note: &ldquo;{proposal.notes}&rdquo;
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -734,7 +945,9 @@ export default function AdminPage() {
                           size="sm"
                           variant="outline"
                           disabled={isProcessing}
-                          onClick={() => handleProcessProposal(proposal.id, 'reject')}
+                          onClick={() =>
+                            handleProcessProposal(proposal.id, "reject")
+                          }
                           className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                         >
                           <X className="w-3.5 h-3.5 mr-1" /> Reject
@@ -743,10 +956,13 @@ export default function AdminPage() {
                           size="sm"
                           variant="default"
                           disabled={isProcessing}
-                          onClick={() => handleProcessProposal(proposal.id, 'approve')}
+                          onClick={() =>
+                            handleProcessProposal(proposal.id, "approve")
+                          }
                           className="h-8 text-xs"
                         >
-                          <Check className="w-3.5 h-3.5 mr-1" /> Approve & Assign
+                          <Check className="w-3.5 h-3.5 mr-1" /> Approve &
+                          Assign
                         </Button>
                       </div>
                     </div>
@@ -764,11 +980,21 @@ export default function AdminPage() {
               Candidate Spreadsheet Ingestion
             </CardTitle>
             <CardDescription className="text-xs">
-              Upload an Excel or CSV file. Choose which column represents Candidate Name / Title so timestamps are never used as card titles.
+              Upload an Excel or CSV file. Choose which column represents
+              Candidate Name / Title so timestamps are never used as card
+              titles.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ExcelUploader onUploadSuccess={() => fetchData()} />
+            <ExcelUploader
+              onUploadSuccess={(uploadData: unknown) => {
+                const resData = uploadData as { state?: DraftState } | undefined;
+                if (resData?.state) {
+                  dispatch({ type: "SET_DRAFT_STATE", state: resData.state });
+                }
+                fetchData();
+              }}
+            />
           </CardContent>
         </Card>
 
@@ -781,14 +1007,18 @@ export default function AdminPage() {
                 Draft Board Candidates ({approvedCandidates.length})
               </CardTitle>
               <CardDescription className="text-xs">
-                Edit candidate details, re-assign them to any team lead, return them to the open pool, or permanently delete them.
+                Edit candidate details, re-assign them to any team lead, return
+                them to the open pool, or permanently delete them.
               </CardDescription>
             </div>
 
             <Button
               size="sm"
               onClick={() => {
-                dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: null });
+                dispatch({
+                  type: "OPEN_CANDIDATE_EDIT_MODAL",
+                  candidate: null,
+                });
               }}
               className="text-xs h-8 flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
             >
@@ -806,38 +1036,55 @@ export default function AdminPage() {
                   type="text"
                   placeholder="Search by name, role, department, or lead..."
                   value={candidateSearchQuery}
-                  onChange={(e) => dispatch({ type: 'SET_CANDIDATE_SEARCH', query: e.target.value })}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_CANDIDATE_SEARCH",
+                      query: e.target.value,
+                    })
+                  }
                   className="pl-8 bg-white h-8 text-xs"
                 />
               </div>
 
               <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 text-xs">
                 <button
-                  onClick={() => dispatch({ type: 'SET_CANDIDATE_FILTER', status: 'all' })}
+                  onClick={() =>
+                    dispatch({ type: "SET_CANDIDATE_FILTER", status: "all" })
+                  }
                   className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
-                    candidateFilterStatus === 'all'
-                      ? 'bg-zinc-900 text-white'
-                      : 'text-zinc-600 hover:text-zinc-950'
+                    candidateFilterStatus === "all"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-600 hover:text-zinc-950"
                   }`}
                 >
                   All ({totalCandidates})
                 </button>
                 <button
-                  onClick={() => dispatch({ type: 'SET_CANDIDATE_FILTER', status: 'assigned' })}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_CANDIDATE_FILTER",
+                      status: "assigned",
+                    })
+                  }
                   className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
-                    candidateFilterStatus === 'assigned'
-                      ? 'bg-zinc-900 text-white'
-                      : 'text-zinc-600 hover:text-zinc-950'
+                    candidateFilterStatus === "assigned"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-600 hover:text-zinc-950"
                   }`}
                 >
                   Assigned ({pickedCandidates})
                 </button>
                 <button
-                  onClick={() => dispatch({ type: 'SET_CANDIDATE_FILTER', status: 'available' })}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_CANDIDATE_FILTER",
+                      status: "available",
+                    })
+                  }
                   className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
-                    candidateFilterStatus === 'available'
-                      ? 'bg-zinc-900 text-white'
-                      : 'text-zinc-600 hover:text-zinc-950'
+                    candidateFilterStatus === "available"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-600 hover:text-zinc-950"
                   }`}
                 >
                   Available ({availableCandidates})
@@ -850,63 +1097,102 @@ export default function AdminPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-zinc-50">
-                    <TableHead className="font-semibold text-xs w-10">#</TableHead>
-                    <TableHead className="font-semibold text-xs">Candidate Name / Title</TableHead>
-                    <TableHead className="font-semibold text-xs">Assignment Status</TableHead>
-                    <TableHead className="font-semibold text-xs">Role</TableHead>
-                    <TableHead className="font-semibold text-xs">Department</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
+                    <TableHead className="font-semibold text-xs w-10">
+                      #
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Candidate Name / Title
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Assignment Status
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Role
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Department
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs text-right">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredCandidates.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-zinc-400 text-xs">
-                        No candidates match your filter. Click &ldquo;Add Candidate Manually&rdquo; to create one.
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-8 text-zinc-400 text-xs"
+                      >
+                        No candidates match your filter. Click &ldquo;Add
+                        Candidate Manually&rdquo; to create one.
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredCandidates.map((candidate, idx) => (
-                      <TableRow key={candidate.id} className="hover:bg-zinc-50/70">
-                        <TableCell className="font-mono text-xs text-zinc-400">{idx + 1}</TableCell>
+                      <TableRow
+                        key={candidate.id}
+                        className="hover:bg-zinc-50/70"
+                      >
+                        <TableCell className="font-mono text-xs text-zinc-400">
+                          {idx + 1}
+                        </TableCell>
                         <TableCell className="font-semibold text-xs text-zinc-900">
                           {candidate.name}
                         </TableCell>
                         <TableCell className="text-xs">
                           {candidate.assignedToLeadName ? (
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge variant="secondary" className="font-medium text-xs">
+                              <Badge
+                                variant="secondary"
+                                className="font-medium text-xs"
+                              >
                                 {candidate.assignedToLeadName}
                               </Badge>
-                              {candidate.assignmentType === 'auto' ? (
-                                <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">
+                              {candidate.assignmentType === "auto" ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-sky-50 text-sky-700 border-sky-200"
+                                >
                                   Auto-Assigned
                                 </Badge>
-                              ) : candidate.assignmentType === 'manual_pick' ? (
-                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                              ) : candidate.assignmentType === "manual_pick" ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200"
+                                >
                                   Self-Picked
                                 </Badge>
-                              ) : candidate.assignmentType === 'admin' ? (
-                                <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                              ) : candidate.assignmentType === "admin" ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-purple-50 text-purple-700 border-purple-200"
+                                >
                                   Admin Assigned
                                 </Badge>
-                              ) : candidate.assignmentType === 'proposal' ? (
-                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                              ) : candidate.assignmentType === "proposal" ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-amber-50 text-amber-700 border-amber-200"
+                                >
                                   Proposal
                                 </Badge>
                               ) : null}
                             </div>
                           ) : (
-                            <Badge variant="outline" className="font-normal text-xs text-zinc-500">
+                            <Badge
+                              variant="outline"
+                              className="font-normal text-xs text-zinc-500"
+                            >
                               Available Pool
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs text-zinc-600">
-                          {candidate.role || '—'}
+                          {candidate.role || "—"}
                         </TableCell>
                         <TableCell className="text-xs text-zinc-600">
-                          {candidate.department || '—'}
+                          {candidate.department || "—"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -914,7 +1200,10 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate });
+                                dispatch({
+                                  type: "OPEN_CANDIDATE_EDIT_MODAL",
+                                  candidate,
+                                });
                               }}
                               title="Edit candidate & reassignment"
                               className="h-7 w-7 text-zinc-500 hover:text-zinc-900 cursor-pointer"
@@ -925,7 +1214,10 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                dispatch({ type: 'OPEN_DELETE_CANDIDATE_DIALOG', candidate });
+                                dispatch({
+                                  type: "OPEN_DELETE_CANDIDATE_DIALOG",
+                                  candidate,
+                                });
                               }}
                               title="Delete candidate"
                               className="h-7 w-7 text-zinc-400 hover:text-red-600 cursor-pointer"
@@ -957,7 +1249,10 @@ export default function AdminPage() {
           <CardContent className="space-y-4">
             {/* Add Lead Form */}
             <div className="space-y-2">
-              <form onSubmit={handleAddLead} className="flex flex-col sm:flex-row items-end gap-2.5 p-3 rounded-lg border border-zinc-200 bg-zinc-50/50">
+              <form
+                onSubmit={handleAddLead}
+                className="flex flex-col sm:flex-row items-end gap-2.5 p-3 rounded-lg border border-zinc-200 bg-zinc-50/50"
+              >
                 <div className="flex-1 w-full space-y-1">
                   <label className="text-[11px] font-medium text-zinc-600 uppercase">
                     Lead Email *
@@ -967,7 +1262,13 @@ export default function AdminPage() {
                     required
                     placeholder="lead@company.com"
                     value={newEmail}
-                    onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newEmail', value: e.target.value })}
+                    onChange={(e) =>
+                      dispatch({
+                        type: "SET_NEW_LEAD_FIELD",
+                        field: "newEmail",
+                        value: e.target.value,
+                      })
+                    }
                     className="bg-white h-8 text-xs"
                   />
                 </div>
@@ -980,7 +1281,13 @@ export default function AdminPage() {
                     type="text"
                     placeholder="Full Name"
                     value={newName}
-                    onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newName', value: e.target.value })}
+                    onChange={(e) =>
+                      dispatch({
+                        type: "SET_NEW_LEAD_FIELD",
+                        field: "newName",
+                        value: e.target.value,
+                      })
+                    }
                     className="bg-white h-8 text-xs"
                   />
                 </div>
@@ -994,14 +1301,25 @@ export default function AdminPage() {
                     min="1"
                     placeholder={`Auto (${nextLeadProjection.autoQuota})`}
                     value={newQuota}
-                    onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newQuota', value: e.target.value })}
+                    onChange={(e) =>
+                      dispatch({
+                        type: "SET_NEW_LEAD_FIELD",
+                        field: "newQuota",
+                        value: e.target.value,
+                      })
+                    }
                     className="bg-white h-8 text-xs"
                   />
                 </div>
 
-                <Button type="submit" disabled={addingLead} size="sm" className="w-full sm:w-auto h-8 text-xs cursor-pointer">
+                <Button
+                  type="submit"
+                  disabled={addingLead}
+                  size="sm"
+                  className="w-full sm:w-auto h-8 text-xs cursor-pointer"
+                >
                   <Plus className="w-3.5 h-3.5 mr-1" />
-                  {addingLead ? 'Adding...' : 'Add Lead'}
+                  {addingLead ? "Adding..." : "Add Lead"}
                 </Button>
               </form>
 
@@ -1010,9 +1328,13 @@ export default function AdminPage() {
                 <p className="text-zinc-500 flex items-center gap-1.5">
                   <Info className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                   <span>
-                    Auto-Quota Rule: If Custom Quota is left blank, this lead will receive an automatic quota of{' '}
-                    <strong className="text-zinc-900 font-semibold">{nextLeadProjection.autoQuota} candidates</strong>{' '}
-                    (calculated from {totalCandidates} candidate pool across {nextLeadProjection.leadCount} teams).
+                    Auto-Quota Rule: If Custom Quota is left blank, this lead
+                    will receive an automatic quota of{" "}
+                    <strong className="text-zinc-900 font-semibold">
+                      {nextLeadProjection.autoQuota} candidates
+                    </strong>{" "}
+                    (calculated from {totalCandidates} candidate pool across{" "}
+                    {nextLeadProjection.leadCount} teams).
                   </span>
                 </p>
 
@@ -1020,7 +1342,12 @@ export default function AdminPage() {
                   <div className="p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 flex items-start gap-2">
                     <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <span>
-                      <strong>Grandfathered Pick Protection:</strong> Adding this lead drops standard quota, but leads who have already picked more ({nextLeadProjection.cappedLeadNames.join(', ')}) will have their quota preserved at their current picks. No drafted candidate will ever be dropped.
+                      <strong>Grandfathered Pick Protection:</strong> Adding
+                      this lead drops standard quota, but leads who have already
+                      picked more (
+                      {nextLeadProjection.cappedLeadNames.join(", ")}) will have
+                      their quota preserved at their current picks. No drafted
+                      candidate will ever be dropped.
                     </span>
                   </div>
                 )}
@@ -1039,17 +1366,32 @@ export default function AdminPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-zinc-50">
-                    <TableHead className="font-semibold text-xs">Lead</TableHead>
-                    <TableHead className="font-semibold text-xs">Email</TableHead>
-                    <TableHead className="font-semibold text-xs text-center">Quota</TableHead>
-                    <TableHead className="font-semibold text-xs">Progress</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Lead
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Email
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs text-center">
+                      Quota
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs">
+                      Progress
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs text-right">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {draftState?.leads.map((lead) => {
-                    const isCustom = lead.customQuota !== undefined && lead.customQuota !== null;
-                    const progressVal = lead.quota > 0 ? (lead.pickedCount / lead.quota) * 100 : 0;
+                    const isCustom =
+                      lead.customQuota !== undefined &&
+                      lead.customQuota !== null;
+                    const progressVal =
+                      lead.quota > 0
+                        ? (lead.pickedCount / lead.quota) * 100
+                        : 0;
 
                     return (
                       <TableRow key={lead.id}>
@@ -1061,22 +1403,37 @@ export default function AdminPage() {
                         </TableCell>
                         <TableCell className="text-center text-xs">
                           {isCustom ? (
-                            <Badge variant="outline" className="text-xs font-semibold border-amber-300 text-amber-700 bg-amber-50">
+                            <Badge
+                              variant="outline"
+                              className="text-xs font-semibold border-amber-300 text-amber-700 bg-amber-50"
+                            >
                               Custom: {lead.quota}
                             </Badge>
-                          ) : lead.pickedCount > 0 && lead.pickedCount === lead.quota && lead.quota > currentProjection.autoQuota ? (
-                            <Badge variant="outline" className="text-xs font-semibold border-purple-300 text-purple-700 bg-purple-50" title="Picks grandfathered from earlier quota">
+                          ) : lead.pickedCount > 0 &&
+                            lead.pickedCount === lead.quota &&
+                            lead.quota > currentProjection.autoQuota ? (
+                            <Badge
+                              variant="outline"
+                              className="text-xs font-semibold border-purple-300 text-purple-700 bg-purple-50"
+                              title="Picks grandfathered from earlier quota"
+                            >
                               Preserved: {lead.quota}
                             </Badge>
                           ) : (
-                            <Badge variant="secondary" className="text-xs font-semibold bg-zinc-100 text-zinc-900">
+                            <Badge
+                              variant="secondary"
+                              className="text-xs font-semibold bg-zinc-100 text-zinc-900"
+                            >
                               Auto: {lead.quota}
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs">
                           <div className="flex items-center gap-2 max-w-[130px]">
-                            <Progress value={progressVal} className="h-1.5 flex-1" />
+                            <Progress
+                              value={progressVal}
+                              className="h-1.5 flex-1"
+                            />
                             <span className="text-[11px] text-zinc-500 font-mono">
                               {lead.pickedCount}/{lead.quota}
                             </span>
@@ -1088,7 +1445,7 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                dispatch({ type: 'OPEN_EDIT_QUOTA', lead });
+                                dispatch({ type: "OPEN_EDIT_QUOTA", lead });
                               }}
                               className="h-7 w-7 text-zinc-400 hover:text-zinc-900 cursor-pointer"
                             >
@@ -1098,7 +1455,10 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                dispatch({ type: 'OPEN_DELETE_LEAD_DIALOG', lead });
+                                dispatch({
+                                  type: "OPEN_DELETE_LEAD_DIALOG",
+                                  lead,
+                                });
                               }}
                               className="h-7 w-7 text-zinc-400 hover:text-red-600 cursor-pointer"
                             >
@@ -1122,25 +1482,38 @@ export default function AdminPage() {
               Current Team Rosters
             </CardTitle>
             <CardDescription className="text-xs">
-              Live view of candidates picked by each team lead with dedicated export options.
+              Live view of candidates picked by each team lead with dedicated
+              export options.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {draftState?.leads.map((lead) => {
                 const squad = draftState.candidates.filter(
-                  (c) => c.assignedToLeadId === lead.id && c.approvalStatus !== 'pending'
+                  (c) =>
+                    c.assignedToLeadId === lead.id &&
+                    c.approvalStatus !== "pending",
                 );
 
                 return (
-                  <div key={lead.id} className="p-3.5 rounded-lg border border-zinc-200 bg-zinc-50/50 space-y-2.5 flex flex-col justify-between">
+                  <div
+                    key={lead.id}
+                    className="p-3.5 rounded-lg border border-zinc-200 bg-zinc-50/50 space-y-2.5 flex flex-col justify-between"
+                  >
                     <div>
                       <div className="flex items-center justify-between pb-2 border-b border-zinc-200">
                         <div>
-                          <p className="text-xs font-bold text-zinc-900">{lead.name}</p>
-                          <p className="text-[10px] text-zinc-400 truncate max-w-[150px]">{lead.email}</p>
+                          <p className="text-xs font-bold text-zinc-900">
+                            {lead.name}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 truncate max-w-[150px]">
+                            {lead.email}
+                          </p>
                         </div>
-                        <Badge variant="secondary" className="text-[10px] font-mono">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-mono"
+                        >
                           {squad.length} / {lead.quota}
                         </Badge>
                       </div>
@@ -1155,27 +1528,43 @@ export default function AdminPage() {
                             <div
                               key={member.id}
                               onClick={() => {
-                                dispatch({ type: 'OPEN_PREVIEW', candidate: member });
+                                dispatch({
+                                  type: "OPEN_PREVIEW",
+                                  candidate: member,
+                                });
                               }}
                               className="p-2 rounded-md bg-white border border-zinc-200 flex items-center justify-between text-xs cursor-pointer hover:border-zinc-400 transition"
                             >
                               <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                                <span className="font-medium text-zinc-900 truncate">{member.name}</span>
-                                {member.assignmentType === 'auto' ? (
-                                  <Badge variant="outline" className="text-[9px] py-0 px-1 bg-sky-50 text-sky-700 border-sky-200 shrink-0">
+                                <span className="font-medium text-zinc-900 truncate">
+                                  {member.name}
+                                </span>
+                                {member.assignmentType === "auto" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1 bg-sky-50 text-sky-700 border-sky-200 shrink-0"
+                                  >
                                     Auto
                                   </Badge>
-                                ) : member.assignmentType === 'manual_pick' ? (
-                                  <Badge variant="outline" className="text-[9px] py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">
+                                ) : member.assignmentType === "manual_pick" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0"
+                                  >
                                     Picked
                                   </Badge>
-                                ) : member.assignmentType === 'admin' ? (
-                                  <Badge variant="outline" className="text-[9px] py-0 px-1 bg-purple-50 text-purple-700 border-purple-200 shrink-0">
+                                ) : member.assignmentType === "admin" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1 bg-purple-50 text-purple-700 border-purple-200 shrink-0"
+                                  >
                                     Admin
                                   </Badge>
                                 ) : null}
                               </div>
-                              <span className="text-[10px] text-zinc-400">View →</span>
+                              <span className="text-[10px] text-zinc-400">
+                                View →
+                              </span>
                             </div>
                           ))
                         )}
@@ -1192,7 +1581,11 @@ export default function AdminPage() {
                         className="h-7 text-xs px-2 text-zinc-600 hover:text-zinc-950 cursor-pointer"
                       >
                         <Download className="w-3 h-3 mr-1" />
-                        <span>{downloadingId === `xlsx_${lead.id}` ? '...' : 'Excel'}</span>
+                        <span>
+                          {downloadingId === `xlsx_${lead.id}`
+                            ? "..."
+                            : "Excel"}
+                        </span>
                       </Button>
                       <Button
                         size="sm"
@@ -1202,7 +1595,9 @@ export default function AdminPage() {
                         className="h-7 text-xs px-2 cursor-pointer"
                       >
                         <Printer className="w-3.5 h-3.5 mr-1" />
-                        <span>{downloadingId === `pdf_${lead.id}` ? '...' : 'PDF'}</span>
+                        <span>
+                          {downloadingId === `pdf_${lead.id}` ? "..." : "PDF"}
+                        </span>
                       </Button>
                     </div>
                   </div>
@@ -1231,11 +1626,17 @@ export default function AdminPage() {
                 min="0"
                 placeholder="Auto"
                 value={editQuotaVal}
-                onChange={(e) => dispatch({ type: 'SET_EDIT_QUOTA_VAL', val: e.target.value })}
+                onChange={(e) =>
+                  dispatch({ type: "SET_EDIT_QUOTA_VAL", val: e.target.value })
+                }
                 className="bg-white text-xs h-8"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'CLOSE_EDIT_QUOTA' })}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => dispatch({ type: "CLOSE_EDIT_QUOTA" })}
+                >
                   Cancel
                 </Button>
                 <Button size="sm" onClick={handleUpdateQuota}>
@@ -1248,7 +1649,12 @@ export default function AdminPage() {
       )}
 
       {/* Auto-Assign Confirmation Dialog */}
-      <Dialog open={isAutoAssignDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_AUTO_ASSIGN_DIALOG' })}>
+      <Dialog
+        open={isAutoAssignDialogOpen}
+        onOpenChange={(open) =>
+          !open && dispatch({ type: "CLOSE_AUTO_ASSIGN_DIALOG" })
+        }
+      >
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950 flex items-center gap-2">
@@ -1256,14 +1662,24 @@ export default function AdminPage() {
               Auto-Distribute Candidate Pool
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-500 mt-1">
-              This will automatically take all <strong>{availableCandidates} unassigned candidate(s)</strong> and distribute them evenly across the {draftState?.leads.length || 0} registered team leads up to each team&apos;s remaining quota.
+              This will automatically take all{" "}
+              <strong>{availableCandidates} unassigned candidate(s)</strong> and
+              distribute them evenly across the {draftState?.leads.length || 0}{" "}
+              registered team leads up to each team&apos;s remaining quota.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2 text-xs text-zinc-600 bg-zinc-50 p-3 rounded-md border border-zinc-200 space-y-1">
-            <p className="font-semibold text-zinc-900">Distribution Safety Guarantees:</p>
+            <p className="font-semibold text-zinc-900">
+              Distribution Safety Guarantees:
+            </p>
             <ul className="list-disc pl-4 space-y-0.5 text-zinc-500">
-              <li>Candidates already claimed by leads will remain untouched.</li>
-              <li>Auto-assigned members will be clearly badged as &quot;Auto-Assigned&quot;.</li>
+              <li>
+                Candidates already claimed by leads will remain untouched.
+              </li>
+              <li>
+                Auto-assigned members will be clearly badged as
+                &quot;Auto-Assigned&quot;.
+              </li>
               <li>No lead will exceed their allocated quota.</li>
             </ul>
           </div>
@@ -1271,7 +1687,7 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => dispatch({ type: 'CLOSE_AUTO_ASSIGN_DIALOG' })}
+              onClick={() => dispatch({ type: "CLOSE_AUTO_ASSIGN_DIALOG" })}
               disabled={autoAssigning}
             >
               Cancel
@@ -1282,28 +1698,35 @@ export default function AdminPage() {
               disabled={autoAssigning || availableCandidates === 0}
               className="bg-zinc-900 text-white hover:bg-zinc-800"
             >
-              {autoAssigning ? 'Distributing...' : 'Yes, Auto-Distribute'}
+              {autoAssigning ? "Distributing..." : "Yes, Auto-Distribute"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Reset Confirmation Dialog */}
-      <Dialog open={isResetDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_RESET_DIALOG' })}>
+      <Dialog
+        open={isResetDialogOpen}
+        onOpenChange={(open) =>
+          !open && dispatch({ type: "CLOSE_RESET_DIALOG" })
+        }
+      >
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950">
               Reset All Candidate Picks
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-500 mt-1">
-              This action will unassign all candidates from their current team leads and return them to the available pool. This cannot be undone.
+              This action will unassign all candidates from their current team
+              leads and return them to the available pool. This cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex items-center gap-2 pt-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => dispatch({ type: 'CLOSE_RESET_DIALOG' })}
+              onClick={() => dispatch({ type: "CLOSE_RESET_DIALOG" })}
               disabled={resetting}
             >
               Cancel
@@ -1314,28 +1737,36 @@ export default function AdminPage() {
               onClick={confirmResetDraft}
               disabled={resetting}
             >
-              {resetting ? 'Resetting...' : 'Yes, Reset Picks'}
+              {resetting ? "Resetting..." : "Yes, Reset Picks"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Shadcn Dialog: Remove Team Lead Confirmation */}
-      <Dialog open={isDeleteLeadDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_DELETE_LEAD_DIALOG' })}>
+      <Dialog
+        open={isDeleteLeadDialogOpen}
+        onOpenChange={(open) =>
+          !open && dispatch({ type: "CLOSE_DELETE_LEAD_DIALOG" })
+        }
+      >
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950">
               Remove Team Lead
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-500 mt-1">
-              Are you sure you want to remove <strong>{leadToDelete?.name}</strong> ({leadToDelete?.email})? Any candidates assigned to them will be returned to the open candidate pool.
+              Are you sure you want to remove{" "}
+              <strong>{leadToDelete?.name}</strong> ({leadToDelete?.email})? Any
+              candidates assigned to them will be returned to the open candidate
+              pool.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex items-center gap-2 pt-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => dispatch({ type: 'CLOSE_DELETE_LEAD_DIALOG' })}
+              onClick={() => dispatch({ type: "CLOSE_DELETE_LEAD_DIALOG" })}
               disabled={deletingLead}
             >
               Cancel
@@ -1346,28 +1777,38 @@ export default function AdminPage() {
               onClick={confirmDeleteLead}
               disabled={deletingLead}
             >
-              {deletingLead ? 'Removing...' : 'Yes, Remove Lead'}
+              {deletingLead ? "Removing..." : "Yes, Remove Lead"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Shadcn Dialog: Delete Candidate Confirmation */}
-      <Dialog open={isDeleteCandidateDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_DELETE_CANDIDATE_DIALOG' })}>
+      <Dialog
+        open={isDeleteCandidateDialogOpen}
+        onOpenChange={(open) =>
+          !open && dispatch({ type: "CLOSE_DELETE_CANDIDATE_DIALOG" })
+        }
+      >
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950">
               Delete Candidate from Draft Board
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-500 mt-1">
-              Are you sure you want to permanently delete <strong>{candidateToDelete?.name}</strong>? This action will remove them from the draft board and adjust team quotas accordingly.
+              Are you sure you want to permanently delete{" "}
+              <strong>{candidateToDelete?.name}</strong>? This action will
+              remove them from the draft board and adjust team quotas
+              accordingly.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex items-center gap-2 pt-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => dispatch({ type: 'CLOSE_DELETE_CANDIDATE_DIALOG' })}
+              onClick={() =>
+                dispatch({ type: "CLOSE_DELETE_CANDIDATE_DIALOG" })
+              }
               disabled={deletingCandidate}
             >
               Cancel
@@ -1378,7 +1819,7 @@ export default function AdminPage() {
               onClick={confirmDeleteCandidate}
               disabled={deletingCandidate}
             >
-              {deletingCandidate ? 'Deleting...' : 'Yes, Delete Candidate'}
+              {deletingCandidate ? "Deleting..." : "Yes, Delete Candidate"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1387,8 +1828,13 @@ export default function AdminPage() {
       {/* Manual Add & Edit Candidate Modal */}
       <CandidateEditModal
         isOpen={isCandidateEditModalOpen}
-        onClose={() => dispatch({ type: 'CLOSE_CANDIDATE_EDIT_MODAL' })}
-        onSuccess={() => fetchData()}
+        onClose={() => dispatch({ type: "CLOSE_CANDIDATE_EDIT_MODAL" })}
+        onSuccess={(updatedState) => {
+          if (updatedState) {
+            dispatch({ type: "SET_DRAFT_STATE", state: updatedState });
+          }
+          fetchData();
+        }}
         candidateToEdit={candidateToEdit}
         leads={draftState?.leads || []}
       />
@@ -1399,16 +1845,16 @@ export default function AdminPage() {
         currentUser={currentUser}
         currentLead={null}
         isOpen={isPreviewOpen}
-        onClose={() => dispatch({ type: 'CLOSE_PREVIEW' })}
+        onClose={() => dispatch({ type: "CLOSE_PREVIEW" })}
         onPick={async () => {}}
         onRelease={handleAdminReleaseCandidate}
         onEdit={(cand) => {
-          dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: cand });
+          dispatch({ type: "OPEN_CANDIDATE_EDIT_MODAL", candidate: cand });
         }}
         onDelete={async (id) => {
           const cand = approvedCandidates.find((c) => c.id === id);
           if (cand) {
-            dispatch({ type: 'OPEN_DELETE_CANDIDATE_DIALOG', candidate: cand });
+            dispatch({ type: "OPEN_DELETE_CANDIDATE_DIALOG", candidate: cand });
           }
         }}
         isDraftLocked={draftState?.settings.isLocked}

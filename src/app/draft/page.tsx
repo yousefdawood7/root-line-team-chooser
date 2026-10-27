@@ -48,14 +48,14 @@ export default function DraftPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const meRes = await fetch('/api/auth/me');
+      const meRes = await fetch('/api/auth/me', { cache: 'no-store' });
       if (!meRes.ok) {
         router.push('/login');
         return;
       }
       const meData = await meRes.json();
 
-      const stateRes = await fetch('/api/draft/state');
+      const stateRes = await fetch('/api/draft/state', { cache: 'no-store' });
       if (stateRes.ok) {
         const stateData = await stateRes.json();
         let resolvedLead = meData.lead;
@@ -104,6 +104,9 @@ export default function DraftPage() {
       throw new Error(data.error || 'Failed to claim candidate');
     }
 
+    if (data.state) {
+      dispatch({ type: 'SET_DRAFT_STATE', draftState: data.state });
+    }
     await fetchData();
 
     if (previewCandidate && previewCandidate.id === candidateId && data.candidate) {
@@ -123,6 +126,9 @@ export default function DraftPage() {
       throw new Error(data.error || 'Failed to release candidate');
     }
 
+    if (data.state) {
+      dispatch({ type: 'SET_DRAFT_STATE', draftState: data.state });
+    }
     await fetchData();
 
     if (previewCandidate && previewCandidate.id === candidateId) {
@@ -146,6 +152,9 @@ export default function DraftPage() {
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || 'Failed to delete candidate');
+    }
+    if (data.state) {
+      dispatch({ type: 'SET_DRAFT_STATE', draftState: data.state });
     }
     toast.success('Candidate permanently deleted');
     await fetchData();
@@ -556,7 +565,12 @@ export default function DraftPage() {
       <CandidateEditModal
         isOpen={isEditModalOpen}
         onClose={() => dispatch({ type: 'CLOSE_CANDIDATE_EDIT_MODAL' })}
-        onSuccess={() => fetchData()}
+        onSuccess={(updatedState) => {
+          if (updatedState) {
+            dispatch({ type: 'SET_DRAFT_STATE', draftState: updatedState });
+          }
+          fetchData();
+        }}
         candidateToEdit={candidateToEdit}
         leads={draftState?.leads || []}
       />
@@ -575,7 +589,12 @@ export default function DraftPage() {
       <ProposeCandidateModal
         isOpen={isProposeOpen}
         onClose={() => dispatch({ type: 'SET_PROPOSE_OPEN', open: false })}
-        onSuccess={() => fetchData()}
+        onSuccess={(updatedState) => {
+          if (updatedState) {
+            dispatch({ type: 'SET_DRAFT_STATE', draftState: updatedState });
+          }
+          fetchData();
+        }}
       />
     </div>
   );

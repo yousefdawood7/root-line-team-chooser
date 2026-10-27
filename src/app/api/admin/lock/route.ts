@@ -2,18 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { setDraftLock } from '@/lib/blob';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403, headers: NO_CACHE_HEADERS });
   }
 
   try {
     const { isLocked } = await req.json();
     const state = await setDraftLock(Boolean(isLocked));
-    return NextResponse.json({ success: true, settings: state.settings });
+    return NextResponse.json({ success: true, settings: state.settings, state }, { headers: NO_CACHE_HEADERS });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to update lock';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

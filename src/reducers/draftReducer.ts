@@ -64,7 +64,23 @@ export function draftReducer(
   action: DraftBoardAction
 ): DraftBoardState {
   switch (action.type) {
-    case 'SET_LOAD_DATA':
+    case 'SET_LOAD_DATA': {
+      const isStale =
+        Boolean(state.draftState) &&
+        Boolean(action.draftState) &&
+        typeof action.draftState.version === 'number' &&
+        typeof state.draftState?.version === 'number' &&
+        action.draftState.version < (state.draftState?.version || 0);
+
+      if (isStale) {
+        return {
+          ...state,
+          currentUser: action.user,
+          currentLead: action.lead,
+          loading: false,
+        };
+      }
+
       return {
         ...state,
         currentUser: action.user,
@@ -72,6 +88,7 @@ export function draftReducer(
         draftState: action.draftState,
         loading: false,
       };
+    }
 
     case 'SET_LOADING':
       return { ...state, loading: action.loading };
@@ -79,8 +96,20 @@ export function draftReducer(
     case 'SET_CURRENT_LEAD':
       return { ...state, currentLead: action.lead };
 
-    case 'SET_DRAFT_STATE':
+    case 'SET_DRAFT_STATE': {
+      const isStale =
+        Boolean(state.draftState) &&
+        Boolean(action.draftState) &&
+        typeof action.draftState.version === 'number' &&
+        typeof state.draftState?.version === 'number' &&
+        action.draftState.version < (state.draftState?.version || 0);
+
+      if (isStale) {
+        return state;
+      }
+
       return { ...state, draftState: action.draftState };
+    }
 
     case 'SET_SEARCH_QUERY':
       return { ...state, searchQuery: action.query };

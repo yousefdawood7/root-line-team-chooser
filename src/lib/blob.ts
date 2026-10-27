@@ -65,7 +65,14 @@ export async function getDraftState(): Promise<DraftState> {
     try {
       const { blobs } = await list({ prefix: BLOB_STATE_FILENAME, limit: 1 });
       if (blobs.length > 0) {
-        const res = await fetch(blobs[0].url, { cache: 'no-store' });
+        const fetchUrl = `${blobs[0].url}?t=${Date.now()}`;
+        const res = await fetch(fetchUrl, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
         if (res.ok) {
           const data = (await res.json()) as DraftState;
           const wasScrubbed = scrubLegacyDummyLeads(data);
@@ -81,6 +88,7 @@ export async function getDraftState(): Promise<DraftState> {
         await put(BLOB_STATE_FILENAME, JSON.stringify(INITIAL_STATE, null, 2), {
           access: 'public',
           addRandomSuffix: false,
+          allowOverwrite: true,
           contentType: 'application/json',
         });
         memoryState = JSON.parse(JSON.stringify(INITIAL_STATE));
@@ -128,11 +136,13 @@ export async function saveDraftState(state: DraftState): Promise<void> {
       await put(BLOB_STATE_FILENAME, jsonContent, {
         access: 'public',
         addRandomSuffix: false,
+        allowOverwrite: true,
         contentType: 'application/json',
       });
       return;
     } catch (err) {
-      console.error('Failed writing to Vercel Blob:', err);
+      console.error('CRITICAL: Failed writing to Vercel Blob:', err);
+      throw new Error(`Failed to save to Vercel Blob: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -140,10 +150,58 @@ export async function saveDraftState(state: DraftState): Promise<void> {
   if (safeEnsureLocalDir()) {
     try {
       fs.writeFileSync(LOCAL_STATE_FILE, jsonContent, 'utf-8');
+      return;
     } catch {
       console.warn('Could not write to local filesystem, state kept in memory');
     }
   }
+}
+
+export interface StorageStatus {
+  backend: 'vercel_blob' | 'local_file' | 'memory';
+  hasToken: boolean;
+  isConnected: boolean;
+  blobFileName?: string;
+  blobCount?: number;
+  error?: string;
+}
+
+export async function getStorageStatus(): Promise<StorageStatus> {
+  const hasToken = hasBlobToken();
+  if (hasToken) {
+    try {
+      const { blobs } = await list({ prefix: BLOB_STATE_FILENAME, limit: 10 });
+      return {
+        backend: 'vercel_blob',
+        hasToken: true,
+        isConnected: true,
+        blobFileName: BLOB_STATE_FILENAME,
+        blobCount: blobs.length,
+      };
+    } catch (err) {
+      return {
+        backend: 'vercel_blob',
+        hasToken: true,
+        isConnected: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  if (safeEnsureLocalDir()) {
+    return {
+      backend: 'local_file',
+      hasToken: false,
+      isConnected: true,
+    };
+  }
+
+  return {
+    backend: 'memory',
+    hasToken: false,
+    isConnected: false,
+    error: 'Ephemeral in-memory mode: BLOB_READ_WRITE_TOKEN is missing on Vercel.',
+  };
 }
 
 /**
@@ -407,6 +465,7 @@ export async function addManualCandidate(data: {
   skills?: string[];
   notes?: string;
   assignToLeadId?: string | null;
+  assignedToLeadId?: string | null;
 }): Promise<{ success: boolean; candidate?: Candidate; error?: string }> {
   return withLock(async () => {
     const state = await getDraftState();
@@ -417,8 +476,9 @@ export async function addManualCandidate(data: {
 
     const id = `cand_man_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     let assignedLead: Lead | undefined;
-    if (data.assignToLeadId) {
-      assignedLead = state.leads.find((l) => l.id === data.assignToLeadId);
+    const targetLeadId = data.assignToLeadId || data.assignedToLeadId;
+    if (targetLeadId) {
+      assignedLead = state.leads.find((l) => l.id === targetLeadId);
     }
 
     const newCandidate: Candidate = {

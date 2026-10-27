@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { toast } from "sonner";
 import { UserPlus, Edit3, AlertCircle } from "lucide-react";
-import { Candidate, Lead } from "@/lib/types";
+import { Candidate, DraftState, Lead } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +17,7 @@ import {
 interface CandidateEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (updatedState?: DraftState) => void;
   candidateToEdit?: Candidate | null;
   leads: Lead[];
 }
@@ -31,7 +31,7 @@ function CandidateEditForm({
   candidateToEdit?: Candidate | null;
   leads: Lead[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (updatedState?: DraftState) => void;
 }) {
   const isEditing = Boolean(candidateToEdit);
 
@@ -56,7 +56,7 @@ function CandidateEditForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -85,6 +85,7 @@ function CandidateEditForm({
         skills: parsedSkills,
         notes: notes.trim() || undefined,
         assignedToLeadId: assignedToLeadId || null,
+        assignToLeadId: assignedToLeadId || null,
       };
 
       const url = "/api/admin/candidates";
@@ -109,7 +110,7 @@ function CandidateEditForm({
           ? `Updated "${trimmedName}" successfully`
           : `Added "${trimmedName}" to draft board`,
       );
-      onSuccess();
+      onSuccess(data.state);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error saving candidate");

@@ -1,9 +1,19 @@
 import { Candidate, DraftState, Lead, UserSession } from '@/lib/types';
 
+export interface StorageStatusInfo {
+  backend: 'vercel_blob' | 'local_file' | 'memory';
+  hasToken: boolean;
+  isConnected: boolean;
+  blobFileName?: string;
+  blobCount?: number;
+  error?: string;
+}
+
 export interface AdminState {
   currentUser: UserSession | null;
   draftState: DraftState | null;
   loading: boolean;
+  storageStatus: StorageStatusInfo | null;
 
   // Title editing
   isEditingTitle: boolean;
@@ -57,6 +67,7 @@ export interface AdminState {
 
 export type AdminAction =
   | { type: 'SET_LOAD_DATA'; user: UserSession; state: DraftState }
+  | { type: 'SET_STORAGE_STATUS'; status: StorageStatusInfo }
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_DRAFT_STATE'; state: DraftState }
   | { type: 'START_EDIT_TITLE'; currentTitle: string }
@@ -94,6 +105,7 @@ export const initialAdminState: AdminState = {
   currentUser: null,
   draftState: null,
   loading: true,
+  storageStatus: null,
   isEditingTitle: false,
   titleInputVal: '',
   newEmail: '',
@@ -125,20 +137,55 @@ export const initialAdminState: AdminState = {
 
 export function adminReducer(state: AdminState, action: AdminAction): AdminState {
   switch (action.type) {
-    case 'SET_LOAD_DATA':
+    case 'SET_LOAD_DATA': {
+      const isStale =
+        Boolean(state.draftState) &&
+        Boolean(action.state) &&
+        typeof action.state.version === 'number' &&
+        typeof state.draftState?.version === 'number' &&
+        action.state.version < (state.draftState?.version || 0);
+
+      if (isStale) {
+        return {
+          ...state,
+          currentUser: action.user,
+          loading: false,
+        };
+      }
+
       return {
         ...state,
         currentUser: action.user,
         draftState: action.state,
-        titleInputVal: action.state?.settings?.title || 'Rootline Team Draft',
+        titleInputVal: state.isEditingTitle ? state.titleInputVal : (action.state?.settings?.title || 'Rootline Team Draft'),
         loading: false,
       };
+    }
+
+    case 'SET_STORAGE_STATUS':
+      return { ...state, storageStatus: action.status };
 
     case 'SET_LOADING':
       return { ...state, loading: action.loading };
 
-    case 'SET_DRAFT_STATE':
-      return { ...state, draftState: action.state };
+    case 'SET_DRAFT_STATE': {
+      const isStale =
+        Boolean(state.draftState) &&
+        Boolean(action.state) &&
+        typeof action.state.version === 'number' &&
+        typeof state.draftState?.version === 'number' &&
+        action.state.version < (state.draftState?.version || 0);
+
+      if (isStale) {
+        return state;
+      }
+
+      return {
+        ...state,
+        draftState: action.state,
+        titleInputVal: state.isEditingTitle ? state.titleInputVal : (action.state?.settings?.title || 'Rootline Team Draft'),
+      };
+    }
 
     case 'START_EDIT_TITLE':
       return { ...state, isEditingTitle: true, titleInputVal: action.currentTitle };
