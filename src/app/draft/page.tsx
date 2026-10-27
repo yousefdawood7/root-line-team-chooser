@@ -441,16 +441,23 @@ export default function DraftPage() {
 
                       {/* Prominent Status / Assigned-By Badge */}
                       {isAssignedToMe ? (
-                        <Badge variant="success" className="text-[10px] shrink-0 font-semibold">
-                          Assigned to: You
-                        </Badge>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Badge variant="success" className="text-[10px] font-semibold">
+                            Assigned to: You
+                          </Badge>
+                          {candidate.assignmentType === 'auto' && (
+                            <Badge variant="outline" className="text-[9px] bg-sky-50 text-sky-700 border-sky-200">
+                              Auto
+                            </Badge>
+                          )}
+                        </div>
                       ) : isAssignedToOther ? (
                         <Badge
                           variant="secondary"
                           className="text-[10px] text-zinc-900 bg-zinc-100 border border-zinc-200 shrink-0 font-medium max-w-[140px] truncate"
-                          title={`Assigned to: ${candidate.assignedToLeadName}`}
+                          title={`Assigned to: ${candidate.assignedToLeadName}${candidate.assignmentType === 'auto' ? ' (Auto-Assigned)' : ''}`}
                         >
-                          Assigned: {candidate.assignedToLeadName}
+                          Assigned: {candidate.assignedToLeadName} {candidate.assignmentType === 'auto' ? '(Auto)' : ''}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] font-normal text-zinc-500 shrink-0">
@@ -493,11 +500,13 @@ export default function DraftPage() {
                     <div className="pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs">
                       {isAssignedToOther ? (
                         <span className="text-[11px] text-zinc-500 font-medium truncate max-w-[160px]">
-                          Drafted by: <strong className="text-zinc-900">{candidate.assignedToLeadName}</strong>
+                          {candidate.assignmentType === 'auto' ? 'Auto-assigned to: ' : 'Drafted by: '}
+                          <strong className="text-zinc-900">{candidate.assignedToLeadName}</strong>
                         </span>
                       ) : isAssignedToMe ? (
                         <span className="text-[11px] text-emerald-700 font-medium">
-                          Drafted by: <strong>Your Team</strong>
+                          {candidate.assignmentType === 'auto' ? 'Auto-assigned to: ' : 'Drafted by: '}
+                          <strong>Your Team</strong>
                         </span>
                       ) : (
                         <span className="text-zinc-400 text-[11px] flex items-center gap-1">

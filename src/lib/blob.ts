@@ -174,9 +174,10 @@ export async function claimCandidate(
     }
 
     if (candidate.assignedToLeadId) {
+      const typeLabel = candidate.assignmentType === 'auto' ? ' (Auto-assigned)' : '';
       return {
         success: false,
-        error: `Candidate already picked by ${candidate.assignedToLeadName || 'another lead'}.`,
+        error: `Candidate already assigned to ${candidate.assignedToLeadName || 'another lead'}${typeLabel}.`,
       };
     }
 
@@ -192,6 +193,8 @@ export async function claimCandidate(
     candidate.assignedToLeadName = currentLead.name;
     candidate.assignedToLeadEmail = currentLead.email;
     candidate.assignedAt = new Date().toISOString();
+    candidate.assignmentType = 'manual_pick';
+    candidate.assignedByName = currentLead.name;
 
     state.leads = recalculateQuotas(state.leads, state.candidates);
     await saveDraftState(state);
@@ -328,6 +331,8 @@ export async function approveProposal(
         candidate.assignedToLeadName = targetLead.name;
         candidate.assignedToLeadEmail = targetLead.email;
         candidate.assignedAt = new Date().toISOString();
+        candidate.assignmentType = 'proposal';
+        candidate.assignedByName = 'Approved Proposal';
 
         const leadCurrentPicks = state.candidates.filter(
           (c) => c.assignedToLeadId === targetLead.id && c.id !== candidate.id
@@ -433,6 +438,8 @@ export async function addManualCandidate(data: {
       assignedToLeadName: assignedLead ? assignedLead.name : null,
       assignedToLeadEmail: assignedLead ? assignedLead.email : null,
       assignedAt: assignedLead ? new Date().toISOString() : null,
+      assignmentType: assignedLead ? 'admin' : null,
+      assignedByName: assignedLead ? 'Admin' : null,
       approvalStatus: 'approved',
     };
 
@@ -489,6 +496,8 @@ export async function updateCandidate(
         candidate.assignedToLeadName = null;
         candidate.assignedToLeadEmail = null;
         candidate.assignedAt = null;
+        candidate.assignmentType = null;
+        candidate.assignedByName = null;
       } else {
         const targetLead = state.leads.find((l) => l.id === data.assignedToLeadId);
         if (targetLead) {
@@ -496,6 +505,8 @@ export async function updateCandidate(
           candidate.assignedToLeadName = targetLead.name;
           candidate.assignedToLeadEmail = targetLead.email;
           candidate.assignedAt = new Date().toISOString();
+          candidate.assignmentType = 'admin';
+          candidate.assignedByName = 'Admin';
         }
       }
     }
@@ -557,10 +568,78 @@ export async function resetDraftPicks(): Promise<DraftState> {
       c.assignedToLeadName = null;
       c.assignedToLeadEmail = null;
       c.assignedAt = null;
+      c.assignmentType = null;
+      c.assignedByName = null;
     }
     state.leads = recalculateQuotas(state.leads, state.candidates);
     await saveDraftState(state);
     return state;
+  });
+}
+
+/**
+ * Concurrency-safe Auto-Distribution of all available candidates across leads up to quota
+ */
+export async function autoDistributePool(): Promise<{ success: boolean; assignedCount: number; error?: string }> {
+  return withLock(async () => {
+    const state = await getDraftState();
+
+    if (state.leads.length === 0) {
+      return { success: false, assignedCount: 0, error: 'No team leads registered to assign candidates to.' };
+    }
+
+    // Always recalculate quotas first to ensure fair limits
+    state.leads = recalculateQuotas(state.leads, state.candidates);
+
+    const availableCandidates = state.candidates.filter(
+      (c) => !c.assignedToLeadId && c.approvalStatus !== 'pending'
+    );
+
+    if (availableCandidates.length === 0) {
+      return { success: false, assignedCount: 0, error: 'No available candidates left to auto-assign.' };
+    }
+
+    let assignedCount = 0;
+    // Map current picks per lead
+    const currentPicks = new Map<string, number>();
+    for (const c of state.candidates) {
+      if (c.assignedToLeadId) {
+        currentPicks.set(c.assignedToLeadId, (currentPicks.get(c.assignedToLeadId) || 0) + 1);
+      }
+    }
+
+    for (const candidate of availableCandidates) {
+      // Find leads who still have remaining quota
+      const eligibleLeads = state.leads.filter((l) => {
+        const picks = currentPicks.get(l.id) || 0;
+        return l.quota > 0 && picks < l.quota;
+      });
+
+      if (eligibleLeads.length === 0) break; // All quotas full
+
+      // Sort leads with fewest picks first (balanced fill)
+      eligibleLeads.sort((a, b) => {
+        const picksA = currentPicks.get(a.id) || 0;
+        const picksB = currentPicks.get(b.id) || 0;
+        return picksA - picksB;
+      });
+
+      const chosenLead = eligibleLeads[0];
+      candidate.assignedToLeadId = chosenLead.id;
+      candidate.assignedToLeadName = chosenLead.name;
+      candidate.assignedToLeadEmail = chosenLead.email;
+      candidate.assignedAt = new Date().toISOString();
+      candidate.assignmentType = 'auto';
+      candidate.assignedByName = 'System Auto-Distribution';
+
+      currentPicks.set(chosenLead.id, (currentPicks.get(chosenLead.id) || 0) + 1);
+      assignedCount++;
+    }
+
+    state.leads = recalculateQuotas(state.leads, state.candidates);
+    await saveDraftState(state);
+
+    return { success: true, assignedCount };
   });
 }
 

@@ -42,6 +42,10 @@ export interface AdminState {
   isResetDialogOpen: boolean;
   resetting: boolean;
 
+  // Auto-Assign Dialog
+  isAutoAssignDialogOpen: boolean;
+  autoAssigning: boolean;
+
   // Preview modal
   selectedCandidate: Candidate | null;
   isPreviewOpen: boolean;
@@ -78,6 +82,9 @@ export type AdminAction =
   | { type: 'OPEN_RESET_DIALOG' }
   | { type: 'CLOSE_RESET_DIALOG' }
   | { type: 'SET_RESETTING'; resetting: boolean }
+  | { type: 'OPEN_AUTO_ASSIGN_DIALOG' }
+  | { type: 'CLOSE_AUTO_ASSIGN_DIALOG' }
+  | { type: 'SET_AUTO_ASSIGNING'; assigning: boolean }
   | { type: 'OPEN_PREVIEW'; candidate: Candidate }
   | { type: 'CLOSE_PREVIEW' }
   | { type: 'SET_PROPOSAL_LOADING'; id: string | null }
@@ -108,6 +115,8 @@ export const initialAdminState: AdminState = {
   candidateFilterStatus: 'all',
   isResetDialogOpen: false,
   resetting: false,
+  isAutoAssignDialogOpen: false,
+  autoAssigning: false,
   selectedCandidate: null,
   isPreviewOpen: false,
   proposalActionLoading: null,
@@ -210,6 +219,15 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
 
     case 'SET_RESETTING':
       return { ...state, resetting: action.resetting };
+
+    case 'OPEN_AUTO_ASSIGN_DIALOG':
+      return { ...state, isAutoAssignDialogOpen: true };
+
+    case 'CLOSE_AUTO_ASSIGN_DIALOG':
+      return { ...state, isAutoAssignDialogOpen: false };
+
+    case 'SET_AUTO_ASSIGNING':
+      return { ...state, autoAssigning: action.assigning };
 
     case 'OPEN_PREVIEW':
       return { ...state, selectedCandidate: action.candidate, isPreviewOpen: true };

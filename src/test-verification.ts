@@ -168,6 +168,50 @@ async function runTests() {
   }
   console.log(`✓ Proposal approved & assigned to ${approveRes.candidate.assignedToLeadName}`);
 
+  // 12. Test Late Lead Addition & Grandfathered Pick Preservation
+  console.log('\n--- 12. Testing Late Lead Addition & Grandfathered Pick Preservation ---');
+  // Setup: 20 candidates, 2 leads initially
+  const simulatedCandidates = Array.from({ length: 20 }, (_, i) => ({
+    id: `cand_${i + 1}`,
+    name: `Candidate ${i + 1}`,
+    rawDetails: {},
+    approvalStatus: 'approved' as const,
+    assignedToLeadId: i < 8 ? 'lead_A' : null, // Lead A has already picked 8
+  }));
+
+  const initialLeads: Lead[] = [
+    { id: 'lead_A', email: 'a@test.com', name: 'Lead A', quota: 10, pickedCount: 8, createdAt: new Date().toISOString() },
+    { id: 'lead_B', email: 'b@test.com', name: 'Lead B', quota: 10, pickedCount: 0, createdAt: new Date().toISOString() },
+  ];
+
+  // Now admin adds Lead C and Lead D late:
+  const expandedLeads: Lead[] = [
+    ...initialLeads,
+    { id: 'lead_C', email: 'c@test.com', name: 'Lead C', quota: 0, pickedCount: 0, createdAt: new Date().toISOString() },
+    { id: 'lead_D', email: 'd@test.com', name: 'Lead D', quota: 0, pickedCount: 0, createdAt: new Date().toISOString() },
+  ];
+
+  const balancedLeads = recalculateQuotas(expandedLeads, simulatedCandidates);
+  const leadA = balancedLeads.find((l) => l.id === 'lead_A')!;
+  const leadB = balancedLeads.find((l) => l.id === 'lead_B')!;
+  const leadC = balancedLeads.find((l) => l.id === 'lead_C')!;
+  const leadD = balancedLeads.find((l) => l.id === 'lead_D')!;
+
+  console.log(`Lead A quota: ${leadA.quota} (picked: ${leadA.pickedCount})`);
+  console.log(`Lead B quota: ${leadB.quota}`);
+  console.log(`Lead C quota: ${leadC.quota}`);
+  console.log(`Lead D quota: ${leadD.quota}`);
+
+  // Lead A's quota MUST be grandfathered at 8 (never dropped to 5!)
+  if (leadA.quota < 8) {
+    throw new Error(`Lead A's quota should be preserved at least at 8, got ${leadA.quota}`);
+  }
+  // Remaining pool (12) must be divided among B, C, D (4 each)
+  if (leadB.quota !== 4 || leadC.quota !== 4 || leadD.quota !== 4) {
+    throw new Error(`Remaining leads should each get 4, got B=${leadB.quota}, C=${leadC.quota}, D=${leadD.quota}`);
+  }
+  console.log('✓ Late lead addition successfully preserved Lead A picks and balanced remaining pool!');
+
   console.log('\n=== ALL TESTS PASSED SUCCESSFULLY! ===');
 }
 

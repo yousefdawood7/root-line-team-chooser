@@ -176,7 +176,9 @@ export function CandidatePreviewModal({
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2.5 text-xs text-emerald-800">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                  <span>Drafted by your team (<strong>{currentLead?.name}</strong>).</span>
+                  <span>
+                    {candidate.assignmentType === 'auto' ? 'Auto-assigned to your team' : 'Drafted by your team'} (<strong>{currentLead?.name}</strong>).
+                  </span>
                 </div>
                 {candidate.assignedAt && (
                   <span className="text-[11px] text-emerald-600 font-mono">
@@ -189,7 +191,8 @@ export function CandidatePreviewModal({
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-zinc-600 shrink-0" />
                   <span>
-                    Assigned to: <strong>{candidate.assignedToLeadName || 'Another Team Lead'}</strong>
+                    {candidate.assignmentType === 'auto' ? 'Auto-assigned to: ' : 'Assigned to: '}
+                    <strong>{candidate.assignedToLeadName || 'Another Team Lead'}</strong>
                     {candidate.assignedToLeadEmail && (
                       <span className="text-zinc-500 font-mono ml-1">({candidate.assignedToLeadEmail})</span>
                     )}

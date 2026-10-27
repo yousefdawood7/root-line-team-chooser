@@ -20,12 +20,16 @@ import {
   UserCheck,
   Search,
   Users,
+  Wand2,
+  Info,
+  ShieldAlert,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { ExcelUploader } from '@/components/ExcelUploader';
 import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
 import { CandidateEditModal } from '@/components/CandidateEditModal';
 import { adminReducer, initialAdminState } from '@/reducers/adminReducer';
+import { getQuotaProjection } from '@/lib/quota';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +87,8 @@ export default function AdminPage() {
     candidateFilterStatus,
     isResetDialogOpen,
     resetting,
+    isAutoAssignDialogOpen,
+    autoAssigning,
     selectedCandidate,
     isPreviewOpen,
     proposalActionLoading,
@@ -376,6 +382,23 @@ export default function AdminPage() {
     dispatch({ type: 'CLOSE_PREVIEW' });
   };
 
+  const handleAutoDistributePool = async () => {
+    try {
+      dispatch({ type: 'SET_AUTO_ASSIGNING', assigning: true });
+      const res = await fetch('/api/admin/auto-assign', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to auto-distribute candidates');
+
+      toast.success(`Successfully auto-assigned ${data.assignedCount} candidate(s) evenly across teams.`);
+      dispatch({ type: 'CLOSE_AUTO_ASSIGN_DIALOG' });
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Auto-distribution failed');
+    } finally {
+      dispatch({ type: 'SET_AUTO_ASSIGNING', assigning: false });
+    }
+  };
+
   const handleProcessProposal = async (candidateId: string, action: 'approve' | 'reject') => {
     try {
       dispatch({ type: 'SET_PROPOSAL_LOADING', id: candidateId });
@@ -419,6 +442,10 @@ export default function AdminPage() {
   const totalCandidates = approvedCandidates.length;
   const pickedCandidates = approvedCandidates.filter((c) => c.assignedToLeadId).length;
   const availableCandidates = totalCandidates - pickedCandidates;
+
+  // Real-time automatic quota calculation & late lead projection
+  const currentProjection = getQuotaProjection(draftState?.leads || [], draftState?.candidates || [], false);
+  const nextLeadProjection = getQuotaProjection(draftState?.leads || [], draftState?.candidates || [], true);
 
   // Filtered candidate list for management table
   const filteredCandidates = approvedCandidates.filter((c) => {
@@ -508,6 +535,16 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => dispatch({ type: 'OPEN_AUTO_ASSIGN_DIALOG' })}
+              className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Auto-Assign Pool</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleToggleLock}
               className="flex items-center gap-1.5 cursor-pointer"
             >
@@ -565,7 +602,7 @@ export default function AdminPage() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Card className="border-zinc-200 bg-white">
             <CardHeader className="p-4 pb-1">
               <CardDescription className="text-xs font-medium uppercase text-zinc-400">
@@ -576,6 +613,23 @@ export default function AdminPage() {
               <p className="text-2xl font-bold text-zinc-900">{totalCandidates}</p>
               <p className="text-[11px] text-zinc-400 truncate mt-0.5">
                 {draftState?.settings.uploadedFileName || 'No file uploaded'}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-zinc-200 bg-white">
+            <CardHeader className="p-4 pb-1">
+              <CardDescription className="text-xs font-medium uppercase text-zinc-400">
+                Auto-Quota Per Lead
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <p className="text-2xl font-bold text-zinc-900">
+                {currentProjection.autoQuota}
+                {currentProjection.remainder > 0 && <span className="text-sm font-normal text-zinc-500"> (+1 rem)</span>}
+              </p>
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                {currentProjection.leadCount > 0 ? `Across ${currentProjection.leadCount} registered lead(s)` : 'No leads registered'}
               </p>
             </CardContent>
           </Card>
@@ -597,7 +651,7 @@ export default function AdminPage() {
           <Card className="border-zinc-200 bg-white">
             <CardHeader className="p-4 pb-1">
               <CardDescription className="text-xs font-medium uppercase text-zinc-400">
-                Available Candidates
+                Available Pool
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
@@ -798,7 +852,7 @@ export default function AdminPage() {
                   <TableRow className="bg-zinc-50">
                     <TableHead className="font-semibold text-xs w-10">#</TableHead>
                     <TableHead className="font-semibold text-xs">Candidate Name / Title</TableHead>
-                    <TableHead className="font-semibold text-xs">Assigned Lead</TableHead>
+                    <TableHead className="font-semibold text-xs">Assignment Status</TableHead>
                     <TableHead className="font-semibold text-xs">Role</TableHead>
                     <TableHead className="font-semibold text-xs">Department</TableHead>
                     <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
@@ -820,9 +874,28 @@ export default function AdminPage() {
                         </TableCell>
                         <TableCell className="text-xs">
                           {candidate.assignedToLeadName ? (
-                            <Badge variant="secondary" className="font-medium text-xs">
-                              Assigned: {candidate.assignedToLeadName}
-                            </Badge>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant="secondary" className="font-medium text-xs">
+                                {candidate.assignedToLeadName}
+                              </Badge>
+                              {candidate.assignmentType === 'auto' ? (
+                                <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">
+                                  Auto-Assigned
+                                </Badge>
+                              ) : candidate.assignmentType === 'manual_pick' ? (
+                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                  Self-Picked
+                                </Badge>
+                              ) : candidate.assignmentType === 'admin' ? (
+                                <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                                  Admin Assigned
+                                </Badge>
+                              ) : candidate.assignmentType === 'proposal' ? (
+                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                                  Proposal
+                                </Badge>
+                              ) : null}
+                            </div>
                           ) : (
                             <Badge variant="outline" className="font-normal text-xs text-zinc-500">
                               Available Pool
@@ -883,53 +956,76 @@ export default function AdminPage() {
 
           <CardContent className="space-y-4">
             {/* Add Lead Form */}
-            <form onSubmit={handleAddLead} className="flex flex-col sm:flex-row items-end gap-2.5 p-3 rounded-lg border border-zinc-200 bg-zinc-50/50">
-              <div className="flex-1 w-full space-y-1">
-                <label className="text-[11px] font-medium text-zinc-600 uppercase">
-                  Lead Email *
-                </label>
-                <Input
-                  type="email"
-                  required
-                  placeholder="lead@company.com"
-                  value={newEmail}
-                  onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newEmail', value: e.target.value })}
-                  className="bg-white h-8 text-xs"
-                />
-              </div>
+            <div className="space-y-2">
+              <form onSubmit={handleAddLead} className="flex flex-col sm:flex-row items-end gap-2.5 p-3 rounded-lg border border-zinc-200 bg-zinc-50/50">
+                <div className="flex-1 w-full space-y-1">
+                  <label className="text-[11px] font-medium text-zinc-600 uppercase">
+                    Lead Email *
+                  </label>
+                  <Input
+                    type="email"
+                    required
+                    placeholder="lead@company.com"
+                    value={newEmail}
+                    onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newEmail', value: e.target.value })}
+                    className="bg-white h-8 text-xs"
+                  />
+                </div>
 
-              <div className="flex-1 w-full space-y-1">
-                <label className="text-[11px] font-medium text-zinc-600 uppercase">
-                  Display Name
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Full Name"
-                  value={newName}
-                  onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newName', value: e.target.value })}
-                  className="bg-white h-8 text-xs"
-                />
-              </div>
+                <div className="flex-1 w-full space-y-1">
+                  <label className="text-[11px] font-medium text-zinc-600 uppercase">
+                    Display Name
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Full Name"
+                    value={newName}
+                    onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newName', value: e.target.value })}
+                    className="bg-white h-8 text-xs"
+                  />
+                </div>
 
-              <div className="w-full sm:w-28 space-y-1">
-                <label className="text-[11px] font-medium text-zinc-600 uppercase">
-                  Custom Quota
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="Auto"
-                  value={newQuota}
-                  onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newQuota', value: e.target.value })}
-                  className="bg-white h-8 text-xs"
-                />
-              </div>
+                <div className="w-full sm:w-28 space-y-1">
+                  <label className="text-[11px] font-medium text-zinc-600 uppercase">
+                    Custom Quota
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder={`Auto (${nextLeadProjection.autoQuota})`}
+                    value={newQuota}
+                    onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newQuota', value: e.target.value })}
+                    className="bg-white h-8 text-xs"
+                  />
+                </div>
 
-              <Button type="submit" disabled={addingLead} size="sm" className="w-full sm:w-auto h-8 text-xs cursor-pointer">
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                {addingLead ? 'Adding...' : 'Add Lead'}
-              </Button>
-            </form>
+                <Button type="submit" disabled={addingLead} size="sm" className="w-full sm:w-auto h-8 text-xs cursor-pointer">
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  {addingLead ? 'Adding...' : 'Add Lead'}
+                </Button>
+              </form>
+
+              {/* Dynamic Auto-Quota Helper & Late Addition Warning */}
+              <div className="px-1 flex flex-col gap-1.5 text-[11px]">
+                <p className="text-zinc-500 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  <span>
+                    Auto-Quota Rule: If Custom Quota is left blank, this lead will receive an automatic quota of{' '}
+                    <strong className="text-zinc-900 font-semibold">{nextLeadProjection.autoQuota} candidates</strong>{' '}
+                    (calculated from {totalCandidates} candidate pool across {nextLeadProjection.leadCount} teams).
+                  </span>
+                </p>
+
+                {nextLeadProjection.hasCappedLeads && (
+                  <div className="p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 flex items-start gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Grandfathered Pick Protection:</strong> Adding this lead drops standard quota, but leads who have already picked more ({nextLeadProjection.cappedLeadNames.join(', ')}) will have their quota preserved at their current picks. No drafted candidate will ever be dropped.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {leadError && (
               <div className="p-2.5 rounded-md bg-red-50 text-red-700 text-xs flex items-center gap-2">
@@ -964,10 +1060,17 @@ export default function AdminPage() {
                           {lead.email}
                         </TableCell>
                         <TableCell className="text-center text-xs">
-                          <span className="font-bold text-zinc-900">{lead.quota}</span>
-                          {isCustom && (
-                            <Badge variant="outline" className="ml-1 text-[9px] py-0 px-1 font-normal text-zinc-500">
-                              Custom
+                          {isCustom ? (
+                            <Badge variant="outline" className="text-xs font-semibold border-amber-300 text-amber-700 bg-amber-50">
+                              Custom: {lead.quota}
+                            </Badge>
+                          ) : lead.pickedCount > 0 && lead.pickedCount === lead.quota && lead.quota > currentProjection.autoQuota ? (
+                            <Badge variant="outline" className="text-xs font-semibold border-purple-300 text-purple-700 bg-purple-50" title="Picks grandfathered from earlier quota">
+                              Preserved: {lead.quota}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs font-semibold bg-zinc-100 text-zinc-900">
+                              Auto: {lead.quota}
                             </Badge>
                           )}
                         </TableCell>
@@ -1056,7 +1159,22 @@ export default function AdminPage() {
                               }}
                               className="p-2 rounded-md bg-white border border-zinc-200 flex items-center justify-between text-xs cursor-pointer hover:border-zinc-400 transition"
                             >
-                              <span className="font-medium text-zinc-900 truncate max-w-[140px]">{member.name}</span>
+                              <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                                <span className="font-medium text-zinc-900 truncate">{member.name}</span>
+                                {member.assignmentType === 'auto' ? (
+                                  <Badge variant="outline" className="text-[9px] py-0 px-1 bg-sky-50 text-sky-700 border-sky-200 shrink-0">
+                                    Auto
+                                  </Badge>
+                                ) : member.assignmentType === 'manual_pick' ? (
+                                  <Badge variant="outline" className="text-[9px] py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">
+                                    Picked
+                                  </Badge>
+                                ) : member.assignmentType === 'admin' ? (
+                                  <Badge variant="outline" className="text-[9px] py-0 px-1 bg-purple-50 text-purple-700 border-purple-200 shrink-0">
+                                    Admin
+                                  </Badge>
+                                ) : null}
+                              </div>
                               <span className="text-[10px] text-zinc-400">View →</span>
                             </div>
                           ))
@@ -1128,6 +1246,47 @@ export default function AdminPage() {
           </Card>
         </div>
       )}
+
+      {/* Auto-Assign Confirmation Dialog */}
+      <Dialog open={isAutoAssignDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_AUTO_ASSIGN_DIALOG' })}>
+        <DialogContent className="max-w-md bg-white border-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-zinc-950 flex items-center gap-2">
+              <Wand2 className="w-4 h-4" />
+              Auto-Distribute Candidate Pool
+            </DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500 mt-1">
+              This will automatically take all <strong>{availableCandidates} unassigned candidate(s)</strong> and distribute them evenly across the {draftState?.leads.length || 0} registered team leads up to each team&apos;s remaining quota.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 text-xs text-zinc-600 bg-zinc-50 p-3 rounded-md border border-zinc-200 space-y-1">
+            <p className="font-semibold text-zinc-900">Distribution Safety Guarantees:</p>
+            <ul className="list-disc pl-4 space-y-0.5 text-zinc-500">
+              <li>Candidates already claimed by leads will remain untouched.</li>
+              <li>Auto-assigned members will be clearly badged as &quot;Auto-Assigned&quot;.</li>
+              <li>No lead will exceed their allocated quota.</li>
+            </ul>
+          </div>
+          <DialogFooter className="flex items-center gap-2 pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => dispatch({ type: 'CLOSE_AUTO_ASSIGN_DIALOG' })}
+              disabled={autoAssigning}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleAutoDistributePool}
+              disabled={autoAssigning || availableCandidates === 0}
+              className="bg-zinc-900 text-white hover:bg-zinc-800"
+            >
+              {autoAssigning ? 'Distributing...' : 'Yes, Auto-Distribute'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reset Confirmation Dialog */}
       <Dialog open={isResetDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_RESET_DIALOG' })}>

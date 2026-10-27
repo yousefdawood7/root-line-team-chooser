@@ -24,6 +24,8 @@ export interface Candidate {
   assignedToLeadName?: string | null;
   assignedToLeadEmail?: string | null;
   assignedAt?: string | null;
+  assignmentType?: 'auto' | 'manual_pick' | 'admin' | 'proposal' | null;
+  assignedByName?: string | null;
   // Proposal & Approval Workflow
   approvalStatus?: 'approved' | 'pending' | 'rejected';
   proposedByLeadId?: string | null;
