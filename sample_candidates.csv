@@ -1,0 +1,12 @@
+Name,Email,Phone,Role,Department,Experience,Skills,Notes,City
+Alex Johnson,alex.j@example.com,+1 555-0101,Senior Frontend Engineer,Engineering,6 years,"React, Next.js, TypeScript, Tailwind",Passionate about design systems and UI accessibility,San Francisco
+Sophia Martinez,sophia.m@example.com,+1 555-0102,Backend Developer,Engineering,4 years,"Node.js, PostgreSQL, Docker, Redis",Experienced in distributed microservices and GraphQL,Austin
+David Kim,david.k@example.com,+1 555-0103,UI/UX Product Designer,Design,5 years,"Figma, Design Systems, Prototyping",Led mobile app redesign with high usability scores,New York
+Emma Watson,emma.w@example.com,+1 555-0104,Full Stack Engineer,Engineering,3 years,"Python, React, FastApi, AWS",Built internal operational tools and data dashboards,Seattle
+Liam Brown,liam.b@example.com,+1 555-0105,DevOps & Cloud Engineer,Infrastructure,5 years,"Kubernetes, Terraform, AWS, CI/CD",Specialized in high-uptime cloud infrastructure,Chicago
+Olivia Davis,olivia.d@example.com,+1 555-0106,Product Manager,Product,4 years,"Roadmapping, Agile, Analytics, User Research",Driven by measurable user impact and KPIs,Boston
+Noah Wilson,noah.w@example.com,+1 555-0107,Data Scientist,Data,3 years,"Python, PyTorch, SQL, Pandas",Created customer retention prediction models,Denver
+Ava Taylor,ava.t@example.com,+1 555-0108,Mobile Developer (iOS/Flutter),Engineering,4 years,"Flutter, Swift, iOS, Firebase",Published 3 top-rated apps on the App Store,San Diego
+Lucas Anderson,lucas.a@example.com,+1 555-0109,QA Automation Engineer,Quality,4 years,"Cypress, Playwright, Jest, CI/CD",Strong advocate for end-to-end automated testing,Atlanta
+Mia Thomas,mia.t@example.com,+1 555-0110,Security Analyst,Security,5 years,"Penetration Testing, OWASP, SOC2",Conducted full vulnerability assessments,Washington DC
+Ethan Jackson,ethan.j@example.com,+1 555-0111,Frontend Engineer,Engineering,2 years,"Vue.js, Tailwind, JavaScript",Quick learner with great eye for animations,Portland
