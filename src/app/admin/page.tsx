@@ -638,36 +638,10 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-              <p className="text-xs text-zinc-500">
-                Manage authorized leads, review member proposals, modify draft
-                board candidates, and export rosters.
-              </p>
-              {storageStatus?.backend === "vercel_blob" && storageStatus.isConnected && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Vercel Blob Active (rootline_state_v1.json)
-                </span>
-              )}
-              {storageStatus?.backend === "vercel_blob" && !storageStatus.isConnected && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                  Vercel Blob Error: {storageStatus.error || "Connection Failed"}
-                </span>
-              )}
-              {storageStatus?.backend === "local_file" && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                  Local Storage (.data/state.json)
-                </span>
-              )}
-              {storageStatus?.backend === "memory" && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-700 border border-red-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                  Ephemeral Memory (Blob Token Missing)
-                </span>
-              )}
-            </div>
+            <p className="text-xs text-zinc-500 mt-1">
+              Manage authorized leads, review member proposals, modify draft
+              board candidates, and export rosters.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

@@ -1,4 +1,4 @@
-import { put, list } from '@vercel/blob';
+import { put, list, get } from '@vercel/blob';
 import fs from 'fs';
 import path from 'path';
 import { Candidate, DraftSettings, DraftState, Lead } from './types';
@@ -57,11 +57,51 @@ function scrubLegacyDummyLeads(state: DraftState): boolean {
   return state.leads.length !== initialCount;
 }
 
+async function putBlobState(jsonContent: string) {
+  try {
+    return await put(BLOB_STATE_FILENAME, jsonContent, {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json',
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Cannot use private access on a public store') || msg.includes('public')) {
+      return await put(BLOB_STATE_FILENAME, jsonContent, {
+        access: 'public',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: 'application/json',
+      });
+    }
+    throw err;
+  }
+}
+
 /**
  * Fetch current state from Vercel Blob or local storage
  */
 export async function getDraftState(): Promise<DraftState> {
   if (hasBlobToken()) {
+    // 1. Try reading via private access get()
+    try {
+      const blobResult = await get(BLOB_STATE_FILENAME, { access: 'private', useCache: false });
+      if (blobResult && blobResult.statusCode === 200 && blobResult.stream) {
+        const text = await new Response(blobResult.stream).text();
+        const data = JSON.parse(text) as DraftState;
+        const wasScrubbed = scrubLegacyDummyLeads(data);
+        memoryState = data;
+        if (wasScrubbed) {
+          saveDraftState(data).catch((e) => console.error('Failed to save scrubbed state to blob:', e));
+        }
+        return data;
+      }
+    } catch (privateErr) {
+      console.warn('Private blob get attempt failed, trying list/public fallback:', privateErr);
+    }
+
+    // 2. Try reading via list()
     try {
       const { blobs } = await list({ prefix: BLOB_STATE_FILENAME, limit: 1 });
       if (blobs.length > 0) {
@@ -85,12 +125,7 @@ export async function getDraftState(): Promise<DraftState> {
         }
       } else {
         // Blob store exists but no state file has been created yet: initialize it directly in Blob!
-        await put(BLOB_STATE_FILENAME, JSON.stringify(INITIAL_STATE, null, 2), {
-          access: 'public',
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType: 'application/json',
-        });
+        await putBlobState(JSON.stringify(INITIAL_STATE, null, 2));
         memoryState = JSON.parse(JSON.stringify(INITIAL_STATE));
         return INITIAL_STATE;
       }
@@ -133,12 +168,7 @@ export async function saveDraftState(state: DraftState): Promise<void> {
 
   if (hasBlobToken()) {
     try {
-      await put(BLOB_STATE_FILENAME, jsonContent, {
-        access: 'public',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: 'application/json',
-      });
+      await putBlobState(jsonContent);
       return;
     } catch (err) {
       console.error('CRITICAL: Failed writing to Vercel Blob:', err);
