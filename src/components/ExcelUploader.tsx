@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileSpreadsheet, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface ExcelUploaderProps {
   onUploadSuccess: (data: any) => void;
@@ -41,7 +42,7 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
         throw new Error(data.error || 'Failed to parse and upload file');
       }
 
-      setSuccessMsg(`Successfully imported ${data.count} candidates! Quotas distributed equally among leads.`);
+      setSuccessMsg(`Successfully imported ${data.count} candidates.`);
       onUploadSuccess(data);
     } catch (err: any) {
       setError(err.message || 'Error uploading file');
@@ -74,10 +75,10 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
+        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
           isDragging
-            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 scale-[1.01]'
-            : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-800/20'
+            ? 'border-zinc-900 bg-zinc-50'
+            : 'border-zinc-200 hover:border-zinc-400 bg-white'
         }`}
       >
         <input
@@ -92,47 +93,41 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
           }}
         />
 
-        <div className="flex flex-col items-center justify-center gap-3">
-          <div className="h-14 w-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-inner">
+        <div className="flex flex-col items-center justify-center gap-2.5">
+          <div className="h-10 w-10 rounded-lg bg-zinc-100 text-zinc-700 flex items-center justify-center">
             {loading ? (
-              <Loader2 className="w-7 h-7 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <FileSpreadsheet className="w-7 h-7" />
+              <FileSpreadsheet className="w-5 h-5" />
             )}
           </div>
 
           <div>
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              {loading ? 'Processing & Ingesting Candidates...' : 'Upload Candidates Excel / CSV'}
+            <p className="text-sm font-semibold text-zinc-900">
+              {loading ? 'Processing Spreadsheet...' : 'Upload Candidates Spreadsheet'}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Drag & drop your .xlsx, .xls, or .csv file here, or click to browse
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Drag and drop your .xlsx, .xls, or .csv file here, or click to browse
             </p>
           </div>
 
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-              .XLSX
-            </span>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-              .XLS
-            </span>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-              .CSV
-            </span>
+          <div className="flex items-center gap-1.5 mt-1">
+            <Badge variant="secondary" className="text-[10px] font-mono">.XLSX</Badge>
+            <Badge variant="secondary" className="text-[10px] font-mono">.XLS</Badge>
+            <Badge variant="secondary" className="text-[10px] font-mono">.CSV</Badge>
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="mt-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+        <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {successMsg && (
-        <div className="mt-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
+        <div className="mt-3 p-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
           <CheckCircle className="w-4 h-4 shrink-0" />
           <span>{successMsg}</span>
         </div>

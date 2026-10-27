@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Technical Grid Overlay Pattern -->
+    <pattern id="blueprint-grid-dark" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M 64 0 L 0 0 0 64" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.12" />
+    </pattern>
+    <!-- App Icon Squircle Clip Path -->
+    <clipPath id="squircle-clip-dark">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" />
+    </clipPath>
+  </defs>
+
+  <!-- Dark Mode App Icon Rounded Container -->
+  <g clip-path="url(#squircle-clip-dark)">
+    <!-- Solid Dark Off-Black Background (#161616) -->
+    <rect width="1024" height="1024" fill="#161616" />
+
+    <!-- Subtle Technical Blueprint Grid Overlay -->
+    <rect width="1024" height="1024" fill="url(#blueprint-grid-dark)" />
+
+    <!-- Scaled Pure White Master Icon Mark (Exact 1:1 Ground-Truth Match) -->
+    <g id="Master-Mark-White" fill="#FFFFFF" transform="translate(319, 242) scale(5.5)">
+      <rect x="0" y="0" width="20" height="20" />
+      <rect x="28" y="0" width="42" height="20" />
+      <rect x="50" y="20" width="20" height="30" />
+      <rect x="0" y="28" width="20" height="70" />
+      <rect x="20" y="44" width="50" height="20" />
+      <rect x="50" y="74" width="20" height="24" />
+    </g>
+  </g>
+</svg>

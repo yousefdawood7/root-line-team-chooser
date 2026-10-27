@@ -1,8 +1,11 @@
 'use client';
 
 import React from 'react';
-import { X, User, Briefcase, Mail, Phone, Award, Building, Sparkles, CheckCircle2, Lock, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Briefcase, Mail, Phone, Award, Building, CheckCircle2, Lock, AlertCircle, Trash2 } from 'lucide-react';
 import { Candidate, Lead, UserSession } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 interface CandidatePreviewModalProps {
   candidate: Candidate | null;
@@ -69,7 +72,6 @@ export function CandidatePreviewModal({
     }
   };
 
-  // Filter rawDetails to exclude standard keys already shown above
   const standardKeys = new Set([
     'name',
     'fullname',
@@ -97,128 +99,95 @@ export function CandidatePreviewModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs">
       <div
-        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-xl bg-white rounded-xl shadow-lg border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between bg-slate-50/50 dark:bg-slate-800/40">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-md shadow-indigo-500/20">
+        <div className="px-6 py-5 border-b border-zinc-200 flex items-start justify-between bg-zinc-50/50">
+          <div className="flex items-center gap-3.5">
+            <div className="h-12 w-12 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xl font-bold">
               {candidate.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              <h2 className="text-lg font-bold text-zinc-950">
                 {candidate.name}
               </h2>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                 {candidate.role && (
-                  <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-medium bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
-                    <Briefcase className="w-3 h-3" />
+                  <Badge variant="secondary" className="font-medium text-xs">
                     {candidate.role}
-                  </span>
+                  </Badge>
                 )}
                 {candidate.department && (
-                  <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                    <Building className="w-3 h-3" />
+                  <Badge variant="outline" className="font-normal text-xs text-zinc-600">
                     {candidate.department}
-                  </span>
+                  </Badge>
                 )}
               </div>
             </div>
           </div>
 
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="text-zinc-400 hover:text-zinc-600"
           >
-            <X className="w-5 h-5" />
-          </button>
+            <X className="w-4 h-4" />
+          </Button>
         </div>
 
         {/* Content Body */}
-        <div className="px-6 py-6 overflow-y-auto space-y-6 flex-1">
+        <div className="px-6 py-5 overflow-y-auto space-y-5 flex-1">
           {/* Status Banner */}
           {isAssignedToMe ? (
-            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-                  This person is part of your team!
-                </p>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                  Picked on {candidate.assignedAt ? new Date(candidate.assignedAt).toLocaleString() : 'recently'}
-                </p>
-              </div>
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2.5 text-xs text-emerald-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>Assigned to your team.</span>
             </div>
           ) : isAssignedToOther ? (
-            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                  Already Claimed
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  Picked by <strong>{candidate.assignedToLeadName || 'another Team Lead'}</strong> ({candidate.assignedToLeadEmail})
-                </p>
-              </div>
+            <div className="p-3 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center gap-2.5 text-xs text-zinc-700">
+              <Lock className="w-4 h-4 text-zinc-500 shrink-0" />
+              <span>Assigned to <strong>{candidate.assignedToLeadName || 'another lead'}</strong>.</span>
             </div>
           ) : (
-            <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 flex items-center justify-between">
-              <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
-                🟢 Available for Selection
-              </span>
+            <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between text-xs text-zinc-700">
+              <span className="font-medium">Available for selection</span>
               {currentLead && (
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Your remaining quota: <strong>{Math.max(0, currentLead.quota - currentLead.pickedCount)}</strong>
+                <span className="text-zinc-500">
+                  Remaining slots: <strong>{Math.max(0, currentLead.quota - currentLead.pickedCount)}</strong>
                 </span>
               )}
             </div>
           )}
 
           {error && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               {error}
             </div>
           )}
 
-          {/* Quick Contact & Info Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Contact & Info Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             {candidate.email && (
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
-                <Mail className="w-4 h-4 text-indigo-500 shrink-0" />
-                <div className="overflow-hidden">
-                  <p className="text-[10px] text-slate-400 uppercase font-semibold">Email</p>
-                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                    {candidate.email}
-                  </p>
-                </div>
+              <div className="p-3 rounded-lg border border-zinc-200 bg-white">
+                <span className="text-zinc-400 font-medium block text-[11px] uppercase">Email</span>
+                <span className="font-medium text-zinc-900 truncate block mt-0.5">{candidate.email}</span>
               </div>
             )}
-
             {candidate.phone && (
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
-                <Phone className="w-4 h-4 text-indigo-500 shrink-0" />
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase font-semibold">Phone</p>
-                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
-                    {candidate.phone}
-                  </p>
-                </div>
+              <div className="p-3 rounded-lg border border-zinc-200 bg-white">
+                <span className="text-zinc-400 font-medium block text-[11px] uppercase">Phone</span>
+                <span className="font-medium text-zinc-900 block mt-0.5">{candidate.phone}</span>
               </div>
             )}
-
             {candidate.experience && (
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
-                <Award className="w-4 h-4 text-indigo-500 shrink-0" />
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase font-semibold">Experience</p>
-                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
-                    {candidate.experience}
-                  </p>
-                </div>
+              <div className="p-3 rounded-lg border border-zinc-200 bg-white">
+                <span className="text-zinc-400 font-medium block text-[11px] uppercase">Experience</span>
+                <span className="font-medium text-zinc-900 block mt-0.5">{candidate.experience}</span>
               </div>
             )}
           </div>
@@ -226,17 +195,14 @@ export function CandidatePreviewModal({
           {/* Skills */}
           {candidate.skills && candidate.skills.length > 0 && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Skills & Technologies
-              </p>
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                Skills
+              </span>
               <div className="flex flex-wrap gap-1.5">
                 {candidate.skills.map((skill, i) => (
-                  <span
-                    key={i}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium border border-slate-200 dark:border-slate-700"
-                  >
+                  <Badge key={i} variant="outline" className="font-normal text-xs text-zinc-800 bg-zinc-50">
                     {skill}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -245,33 +211,26 @@ export function CandidatePreviewModal({
           {/* Notes / Bio */}
           {candidate.notes && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                Notes / Bio
-              </p>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/30 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1">
+                Notes
+              </span>
+              <p className="text-xs text-zinc-700 leading-relaxed bg-zinc-50 p-3 rounded-lg border border-zinc-200">
                 {candidate.notes}
               </p>
             </div>
           )}
 
-          {/* All custom Excel columns */}
+          {/* Custom Spreadsheet Columns */}
           {customFields.length > 0 && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Additional File Information
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                Additional Details
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 {customFields.map(([key, val], idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800"
-                  >
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
-                      {key}
-                    </p>
-                    <p className="text-xs text-slate-800 dark:text-slate-200 break-words font-medium">
-                      {String(val)}
-                    </p>
+                  <div key={idx} className="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/50">
+                    <span className="text-[10px] text-zinc-400 font-semibold uppercase block">{key}</span>
+                    <span className="font-medium text-zinc-800 block mt-0.5 break-words">{String(val)}</span>
                   </div>
                 ))}
               </div>
@@ -280,67 +239,44 @@ export function CandidatePreviewModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 flex items-center justify-between gap-3">
+        <div className="px-6 py-4 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between gap-3">
           {canRelease ? (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleRelease}
               disabled={loading}
-              className="text-xs font-semibold px-4 py-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition flex items-center gap-1.5"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
               Release Candidate
-            </button>
+            </Button>
           ) : (
             <div />
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="text-xs font-semibold px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition"
-            >
+            <Button variant="outline" size="sm" onClick={onClose}>
               Close
-            </button>
+            </Button>
 
             {currentUser?.role === 'lead' && (
-              <button
+              <Button
+                size="sm"
+                variant={isAssignedToMe ? "secondary" : "default"}
                 onClick={handlePick}
-                disabled={
-                  loading ||
-                  isAssigned ||
-                  isQuotaReached ||
-                  Boolean(isDraftLocked)
-                }
-                className={`text-xs font-bold px-6 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm ${
-                  isAssignedToMe
-                    ? 'bg-emerald-600 text-white cursor-default'
-                    : isAssignedToOther
-                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                    : isQuotaReached
-                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/25'
-                }`}
+                disabled={loading || isAssigned || isQuotaReached || Boolean(isDraftLocked)}
               >
-                {loading ? (
-                  'Locking...'
-                ) : isAssignedToMe ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" /> Selected
-                  </>
-                ) : isAssignedToOther ? (
-                  <>
-                    <Lock className="w-4 h-4" /> Already Taken
-                  </>
-                ) : isQuotaReached ? (
-                  'Quota Full'
-                ) : isDraftLocked ? (
-                  'Draft Locked'
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" /> Pick for My Team
-                  </>
-                )}
-              </button>
+                {loading
+                  ? 'Saving...'
+                  : isAssignedToMe
+                  ? 'Selected'
+                  : isAssignedToOther
+                  ? 'Unavailable'
+                  : isQuotaReached
+                  ? 'Quota Reached'
+                  : 'Select for My Team'}
+              </Button>
             )}
           </div>
         </div>
