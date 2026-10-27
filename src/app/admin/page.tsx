@@ -588,6 +588,14 @@ export default function AdminPage() {
                     onChange={(e) =>
                       dispatch({ type: "SET_TITLE_INPUT", val: e.target.value })
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleSaveTitle();
+                      } else if (e.key === "Escape") {
+                        dispatch({ type: "CANCEL_EDIT_TITLE" });
+                      }
+                    }}
                     className="h-8 text-sm font-bold max-w-xs bg-white"
                     autoFocus
                   />
