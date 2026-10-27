@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useState, type FormEvent } from 'react';
-import { toast } from 'sonner';
-import { UserPlus, Edit3, AlertCircle } from 'lucide-react';
-import { Candidate, Lead } from '@/lib/types';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SubmitEventHandler, useState, type FormEvent } from "react";
+import { toast } from "sonner";
+import { UserPlus, Edit3, AlertCircle } from "lucide-react";
+import { Candidate, Lead } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 interface CandidateEditModalProps {
   isOpen: boolean;
@@ -35,24 +35,32 @@ function CandidateEditForm({
 }) {
   const isEditing = Boolean(candidateToEdit);
 
-  const [name, setName] = useState(candidateToEdit?.name || '');
-  const [role, setRole] = useState(candidateToEdit?.role || '');
-  const [department, setDepartment] = useState(candidateToEdit?.department || '');
-  const [experience, setExperience] = useState(candidateToEdit?.experience || '');
-  const [email, setEmail] = useState(candidateToEdit?.email || '');
-  const [phone, setPhone] = useState(candidateToEdit?.phone || '');
-  const [skills, setSkills] = useState(candidateToEdit?.skills?.join(', ') || '');
-  const [notes, setNotes] = useState(candidateToEdit?.notes || '');
-  const [assignedToLeadId, setAssignedToLeadId] = useState(candidateToEdit?.assignedToLeadId || '');
+  const [name, setName] = useState(candidateToEdit?.name || "");
+  const [role, setRole] = useState(candidateToEdit?.role || "");
+  const [department, setDepartment] = useState(
+    candidateToEdit?.department || "",
+  );
+  const [experience, setExperience] = useState(
+    candidateToEdit?.experience || "",
+  );
+  const [email, setEmail] = useState(candidateToEdit?.email || "");
+  const [phone, setPhone] = useState(candidateToEdit?.phone || "");
+  const [skills, setSkills] = useState(
+    candidateToEdit?.skills?.join(", ") || "",
+  );
+  const [notes, setNotes] = useState(candidateToEdit?.notes || "");
+  const [assignedToLeadId, setAssignedToLeadId] = useState(
+    candidateToEdit?.assignedToLeadId || "",
+  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError('Candidate Name / Title is required.');
+      setError("Candidate Name / Title is required.");
       return;
     }
 
@@ -62,7 +70,7 @@ function CandidateEditForm({
 
       const parsedSkills = skills
         ? skills
-            .split(',')
+            .split(",")
             .map((s) => s.trim())
             .filter(Boolean)
         : [];
@@ -79,30 +87,32 @@ function CandidateEditForm({
         assignedToLeadId: assignedToLeadId || null,
       };
 
-      const url = '/api/admin/candidates';
-      const method = isEditing ? 'PATCH' : 'POST';
-      const body = isEditing ? { id: candidateToEdit?.id, ...payload } : payload;
+      const url = "/api/admin/candidates";
+      const method = isEditing ? "PATCH" : "POST";
+      const body = isEditing
+        ? { id: candidateToEdit?.id, ...payload }
+        : payload;
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to save candidate');
+        throw new Error(data.error || "Failed to save candidate");
       }
 
       toast.success(
         isEditing
           ? `Updated "${trimmedName}" successfully`
-          : `Added "${trimmedName}" to draft board`
+          : `Added "${trimmedName}" to draft board`,
       );
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error saving candidate');
+      setError(err instanceof Error ? err.message : "Error saving candidate");
     } finally {
       setLoading(false);
     }
@@ -112,13 +122,19 @@ function CandidateEditForm({
     <>
       <DialogHeader>
         <DialogTitle className="text-base font-bold text-zinc-950 flex items-center gap-2">
-          {isEditing ? <Edit3 className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-          <span>{isEditing ? 'Edit Candidate Details' : 'Add Candidate Manually'}</span>
+          {isEditing ? (
+            <Edit3 className="w-4 h-4" />
+          ) : (
+            <UserPlus className="w-4 h-4" />
+          )}
+          <span>
+            {isEditing ? "Edit Candidate Details" : "Add Candidate Manually"}
+          </span>
         </DialogTitle>
         <DialogDescription className="text-xs text-zinc-500">
           {isEditing
-            ? 'Update candidate attributes, reassign to a team lead, or return to the open pool.'
-            : 'Add a new candidate directly to the draft board without uploading a file.'}
+            ? "Update candidate attributes, reassign to a team lead, or return to the open pool."
+            : "Add a new candidate directly to the draft board without uploading a file."}
         </DialogDescription>
       </DialogHeader>
 
@@ -262,11 +278,21 @@ function CandidateEditForm({
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-100">
-          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={loading}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </Button>
           <Button type="submit" size="sm" disabled={loading}>
-            {loading ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Candidate'}
+            {loading
+              ? "Saving..."
+              : isEditing
+                ? "Save Changes"
+                : "Add Candidate"}
           </Button>
         </div>
       </form>
@@ -287,7 +313,7 @@ export function CandidateEditModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg bg-white border-zinc-200">
         <CandidateEditForm
-          key={candidateToEdit?.id || 'new_candidate'}
+          key={candidateToEdit?.id || "new_candidate"}
           candidateToEdit={candidateToEdit}
           leads={leads}
           onClose={onClose}
