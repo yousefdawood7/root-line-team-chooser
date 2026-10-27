@@ -11,7 +11,7 @@ export interface Lead {
 
 export interface Candidate {
   id: string;
-  name: string; // Only required field
+  name: string; // Only required field (Card Title / Primary Identifier)
   email?: string;
   phone?: string;
   role?: string;
@@ -30,6 +30,17 @@ export interface Candidate {
   proposedByLeadName?: string | null;
   proposedByLeadEmail?: string | null;
   proposedAt?: string | null;
+}
+
+export interface ColumnMapping {
+  titleCol: string; // The chosen column from the spreadsheet for Candidate Title / Name
+  roleCol?: string;
+  departmentCol?: string;
+  emailCol?: string;
+  phoneCol?: string;
+  experienceCol?: string;
+  skillsCol?: string;
+  notesCol?: string;
 }
 
 export interface DraftSettings {

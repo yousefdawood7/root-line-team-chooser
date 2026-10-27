@@ -57,7 +57,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo & Brand Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex h-14 w-14 rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-950 items-center justify-center p-1.5 shadow-xs mb-3">
+          <div className="inline-flex h-14 w-14 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.18)] items-center justify-center mb-3">
             <Image
               src="/logo.svg"
               alt="Root Line"

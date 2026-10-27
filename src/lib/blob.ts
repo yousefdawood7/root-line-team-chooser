@@ -369,7 +369,8 @@ export async function rejectProposal(
 
 export async function importCandidates(
   candidates: Candidate[],
-  filename: string
+  filename: string,
+  sessionTitle?: string
 ): Promise<DraftState> {
   return withLock(async () => {
     const state = await getDraftState();
@@ -377,8 +378,172 @@ export async function importCandidates(
     state.settings.uploadedFileName = filename;
     state.settings.uploadedAt = new Date().toISOString();
     state.settings.totalCandidates = candidates.length;
+    if (sessionTitle && sessionTitle.trim()) {
+      state.settings.title = sessionTitle.trim();
+    }
 
     state.leads = recalculateQuotas(state.leads, state.candidates);
+    await saveDraftState(state);
+    return state;
+  });
+}
+
+/**
+ * Add a candidate manually ("by hand")
+ */
+export async function addManualCandidate(data: {
+  name: string;
+  role?: string;
+  department?: string;
+  experience?: string;
+  email?: string;
+  phone?: string;
+  skills?: string[];
+  notes?: string;
+  assignToLeadId?: string | null;
+}): Promise<{ success: boolean; candidate?: Candidate; error?: string }> {
+  return withLock(async () => {
+    const state = await getDraftState();
+    const trimmedName = data.name.trim();
+    if (!trimmedName) {
+      return { success: false, error: 'Candidate name is required.' };
+    }
+
+    const id = `cand_man_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    let assignedLead: Lead | undefined;
+    if (data.assignToLeadId) {
+      assignedLead = state.leads.find((l) => l.id === data.assignToLeadId);
+    }
+
+    const newCandidate: Candidate = {
+      id,
+      name: trimmedName,
+      role: data.role?.trim() || undefined,
+      department: data.department?.trim() || undefined,
+      experience: data.experience?.trim() || undefined,
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      skills: data.skills && data.skills.length > 0 ? data.skills : undefined,
+      notes: data.notes?.trim() || undefined,
+      rawDetails: {
+        Source: 'Manual Addition',
+        'Created At': new Date().toISOString(),
+      },
+      assignedToLeadId: assignedLead ? assignedLead.id : null,
+      assignedToLeadName: assignedLead ? assignedLead.name : null,
+      assignedToLeadEmail: assignedLead ? assignedLead.email : null,
+      assignedAt: assignedLead ? new Date().toISOString() : null,
+      approvalStatus: 'approved',
+    };
+
+    state.candidates.push(newCandidate);
+    state.settings.totalCandidates = state.candidates.filter((c) => c.approvalStatus !== 'pending').length;
+    state.leads = recalculateQuotas(state.leads, state.candidates);
+    await saveDraftState(state);
+
+    return { success: true, candidate: newCandidate };
+  });
+}
+
+/**
+ * Modify any candidate across the draft board (edit details, reassign lead, or return to pool)
+ */
+export async function updateCandidate(
+  candidateId: string,
+  data: {
+    name?: string;
+    role?: string;
+    department?: string;
+    experience?: string;
+    email?: string;
+    phone?: string;
+    skills?: string[];
+    notes?: string;
+    assignedToLeadId?: string | null;
+  }
+): Promise<{ success: boolean; candidate?: Candidate; error?: string }> {
+  return withLock(async () => {
+    const state = await getDraftState();
+    const candidate = state.candidates.find((c) => c.id === candidateId);
+    if (!candidate) {
+      return { success: false, error: 'Candidate not found.' };
+    }
+
+    if (data.name !== undefined) {
+      const trimmed = data.name.trim();
+      if (!trimmed) return { success: false, error: 'Candidate name cannot be empty.' };
+      candidate.name = trimmed;
+    }
+    if (data.role !== undefined) candidate.role = data.role.trim() || undefined;
+    if (data.department !== undefined) candidate.department = data.department.trim() || undefined;
+    if (data.experience !== undefined) candidate.experience = data.experience.trim() || undefined;
+    if (data.email !== undefined) candidate.email = data.email.trim() || undefined;
+    if (data.phone !== undefined) candidate.phone = data.phone.trim() || undefined;
+    if (data.skills !== undefined) candidate.skills = data.skills.length > 0 ? data.skills : undefined;
+    if (data.notes !== undefined) candidate.notes = data.notes.trim() || undefined;
+
+    // Handle reassignment or returning to open pool
+    if (data.assignedToLeadId !== undefined) {
+      if (!data.assignedToLeadId) {
+        candidate.assignedToLeadId = null;
+        candidate.assignedToLeadName = null;
+        candidate.assignedToLeadEmail = null;
+        candidate.assignedAt = null;
+      } else {
+        const targetLead = state.leads.find((l) => l.id === data.assignedToLeadId);
+        if (targetLead) {
+          candidate.assignedToLeadId = targetLead.id;
+          candidate.assignedToLeadName = targetLead.name;
+          candidate.assignedToLeadEmail = targetLead.email;
+          candidate.assignedAt = new Date().toISOString();
+        }
+      }
+    }
+
+    state.leads = recalculateQuotas(state.leads, state.candidates);
+    await saveDraftState(state);
+
+    return { success: true, candidate };
+  });
+}
+
+/**
+ * Permanently delete a candidate from the draft board
+ */
+export async function deleteCandidate(
+  candidateId: string
+): Promise<{ success: boolean; error?: string }> {
+  return withLock(async () => {
+    const state = await getDraftState();
+    const index = state.candidates.findIndex((c) => c.id === candidateId);
+    if (index === -1) {
+      return { success: false, error: 'Candidate not found.' };
+    }
+
+    state.candidates.splice(index, 1);
+    state.settings.totalCandidates = state.candidates.filter((c) => c.approvalStatus !== 'pending').length;
+    state.leads = recalculateQuotas(state.leads, state.candidates);
+    await saveDraftState(state);
+
+    return { success: true };
+  });
+}
+
+/**
+ * Update draft board session settings (e.g. custom title or lock state)
+ */
+export async function updateDraftSettings(settingsUpdate: {
+  title?: string;
+  isLocked?: boolean;
+}): Promise<DraftState> {
+  return withLock(async () => {
+    const state = await getDraftState();
+    if (settingsUpdate.title !== undefined) {
+      state.settings.title = settingsUpdate.title.trim() || state.settings.title;
+    }
+    if (settingsUpdate.isLocked !== undefined) {
+      state.settings.isLocked = settingsUpdate.isLocked;
+    }
     await saveDraftState(state);
     return state;
   });

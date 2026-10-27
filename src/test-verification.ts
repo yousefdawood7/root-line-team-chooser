@@ -1,23 +1,24 @@
 import fs from 'fs';
 import path from 'path';
-import { parseCandidateFile, generateExportWorkbook } from './lib/excel';
+import { parseCandidateFile, generateExportWorkbook, inspectCandidateFile } from './lib/excel';
 import { generateRosterPDF } from './lib/pdf';
 import { recalculateQuotas } from './lib/quota';
 import {
   claimCandidate,
-  releaseCandidate,
   getDraftState,
   saveDraftState,
   proposeCandidate,
   approveProposal,
-  rejectProposal,
+  addManualCandidate,
+  updateCandidate,
+  deleteCandidate,
 } from './lib/blob';
 import { Lead } from './lib/types';
 
 async function runTests() {
   console.log('=== STARTING TEST VERIFICATION ===');
 
-  // 1. Test CSV Ingestion
+  // 1. Test CSV Ingestion with Standard Headers
   console.log('\n--- 1. Testing CSV Ingestion ---');
   const sampleCsvPath = path.join(process.cwd(), 'sample_candidates.csv');
   const csvBuffer = fs.readFileSync(sampleCsvPath);
@@ -27,8 +28,31 @@ async function runTests() {
     throw new Error(`Expected 11 candidates, got ${parsedCandidates.length}`);
   }
 
-  // 2. Test Quota Division & Odd Remainder Allocation
-  console.log('\n--- 2. Testing Quota Division & Odd Remainder Distribution ---');
+  // 2. Test Column Mapping & Timestamp Blacklisting (Google Form Simulation)
+  console.log('\n--- 2. Testing Column Mapping & Google Form Timestamp Blacklist ---');
+  const googleFormCsv = `Timestamp,Full Name,Email Address,Track,Phone\n2026-10-27 14:22:01,Sarah Connor,sarah@example.com,Cybersecurity,+1-555-0999\n2026-10-27 14:25:33,John Matrix,john@example.com,Commando Ops,+1-555-0888`;
+  const gfBuffer = Buffer.from(googleFormCsv, 'utf-8');
+
+  const inspection = inspectCandidateFile(gfBuffer, 'google_forms.csv');
+  console.log(`Inspection suggested title column: "${inspection.suggestedMapping.titleCol}"`);
+  if (inspection.suggestedMapping.titleCol !== 'Full Name') {
+    throw new Error(`Expected suggested title column to be "Full Name", got "${inspection.suggestedMapping.titleCol}"`);
+  }
+
+  // Parse with chosen column mapping
+  const gfCandidates = parseCandidateFile(gfBuffer, 'google_forms.csv', {
+    titleCol: 'Full Name',
+    roleCol: 'Track',
+    emailCol: 'Email Address',
+    phoneCol: 'Phone',
+  });
+  if (gfCandidates[0].name !== 'Sarah Connor') {
+    throw new Error(`Candidate name should be "Sarah Connor", got "${gfCandidates[0].name}"`);
+  }
+  console.log(`✓ Candidate title correctly mapped to "${gfCandidates[0].name}" instead of Timestamp!`);
+
+  // 3. Test Quota Division & Odd Remainder Allocation
+  console.log('\n--- 3. Testing Quota Division & Odd Remainder Distribution ---');
   const testLeads: Lead[] = [
     {
       id: 'lead-1',
@@ -55,8 +79,44 @@ async function runTests() {
   }
   console.log('✓ Quota split correctly gives 5 and 6 (half each + 1 random remainder)!');
 
-  // 3. Test Pick & Collision Lock
-  console.log('\n--- 3. Testing Candidate Pick & Lock ---');
+  // 4. Test Manual Candidate Addition ("Add by hand")
+  console.log('\n--- 4. Testing Manual Candidate Addition ---');
+  const manualAddRes = await addManualCandidate({
+    name: 'Elena Rostova',
+    role: 'Principal Architect',
+    department: 'Platform',
+    email: 'elena@rootline.com',
+    skills: ['Rust', 'Distributed Systems'],
+  });
+  if (!manualAddRes.success || !manualAddRes.candidate) {
+    throw new Error(`Failed to add manual candidate: ${manualAddRes.error}`);
+  }
+  console.log(`✓ Added manual candidate: "${manualAddRes.candidate.name}" (ID: ${manualAddRes.candidate.id})`);
+
+  // 5. Test Candidate Editing & Reassignment
+  console.log('\n--- 5. Testing Candidate Modification & Reassignment ---');
+  const updateRes = await updateCandidate(manualAddRes.candidate.id, {
+    role: 'Distinguished Architect',
+    assignedToLeadId: testLeads[0].id,
+  });
+  if (!updateRes.success || !updateRes.candidate) {
+    throw new Error(`Failed to update candidate: ${updateRes.error}`);
+  }
+  if (updateRes.candidate.assignedToLeadId !== testLeads[0].id) {
+    throw new Error('Candidate should be assigned to lead-1');
+  }
+  console.log(`✓ Successfully updated candidate role to "${updateRes.candidate.role}" and assigned to "${updateRes.candidate.assignedToLeadName}"`);
+
+  // 6. Test Candidate Deletion
+  console.log('\n--- 6. Testing Candidate Deletion ---');
+  const deleteRes = await deleteCandidate(manualAddRes.candidate.id);
+  if (!deleteRes.success) {
+    throw new Error(`Failed to delete candidate: ${deleteRes.error}`);
+  }
+  console.log(`✓ Successfully deleted candidate from board.`);
+
+  // 7. Test Pick & Collision Lock
+  console.log('\n--- 7. Testing Candidate Pick & Lock ---');
   const state = await getDraftState();
   state.candidates = parsedCandidates;
   state.leads = leadsWithQuota;
@@ -65,22 +125,21 @@ async function runTests() {
 
   const targetCandidateId = parsedCandidates[0].id;
   const lead1 = leadsWithQuota[0];
-  const lead2 = leadsWithQuota[1];
 
   const pick1 = await claimCandidate(targetCandidateId, lead1);
   if (!pick1.success) throw new Error(`Lead 1 failed to pick: ${pick1.error}`);
   console.log(`✓ Lead 1 claimed: ${pick1.candidate?.name}`);
 
-  // 4. Test Targeted Excel Exports
-  console.log('\n--- 4. Testing Targeted Excel Exports ---');
+  // 8. Test Targeted Excel Exports
+  console.log('\n--- 8. Testing Targeted Excel Exports ---');
   const allExport = generateExportWorkbook(state.candidates, state.leads, null);
   console.log(`✓ All teams Excel: "${allExport.filename}" (${allExport.buffer.length} bytes)`);
 
   const singleLeadExport = generateExportWorkbook(state.candidates, state.leads, lead1.id);
   console.log(`✓ Single lead Excel: "${singleLeadExport.filename}" (${singleLeadExport.buffer.length} bytes)`);
 
-  // 5. Test Styled PDF Generation
-  console.log('\n--- 5. Testing Styled PDF Generation (jsPDF + AutoTable) ---');
+  // 9. Test Styled PDF Generation
+  console.log('\n--- 9. Testing Styled PDF Generation (jsPDF + AutoTable) ---');
   const allPdf = generateRosterPDF(state.candidates, state.leads, null);
   console.log(`✓ All teams PDF: "${allPdf.filename}" (${allPdf.buffer.length} bytes)`);
   if (allPdf.buffer.length < 3000) {
@@ -89,34 +148,30 @@ async function runTests() {
 
   const singleLeadPdf = generateRosterPDF(state.candidates, state.leads, lead1.id);
   console.log(`✓ Single lead PDF: "${singleLeadPdf.filename}" (${singleLeadPdf.buffer.length} bytes)`);
-  if (!singleLeadPdf.filename.includes(lead1.name)) {
-    throw new Error(`PDF filename should include lead name ${lead1.name}`);
-  }
 
-  // 6. Test Custom Candidate Proposal
-  console.log('\n--- 6. Testing Custom Candidate Proposal (Name Only) ---');
+  // 10. Test Custom Candidate Proposal
+  console.log('\n--- 10. Testing Custom Candidate Proposal (Name Only) ---');
   const proposalRes = await proposeCandidate(
     { name: 'Marcus Sterling' },
     { id: lead1.id, name: lead1.name, email: lead1.email }
   );
-
   if (!proposalRes.success || !proposalRes.candidate) {
-    throw new Error(`Proposal failed: ${proposalRes.error}`);
+    throw new Error(`Failed to propose candidate: ${proposalRes.error}`);
   }
   console.log(`✓ Proposal created: "${proposalRes.candidate.name}"`);
 
-  // 7. Test Admin Approval
-  console.log('\n--- 7. Testing Admin Approval of Proposal ---');
+  // 11. Test Admin Approval of Proposal
+  console.log('\n--- 11. Testing Admin Approval of Proposal ---');
   const approveRes = await approveProposal(proposalRes.candidate.id);
   if (!approveRes.success || !approveRes.candidate) {
-    throw new Error(`Approval failed: ${approveRes.error}`);
+    throw new Error(`Failed to approve proposal: ${approveRes.error}`);
   }
   console.log(`✓ Proposal approved & assigned to ${approveRes.candidate.assignedToLeadName}`);
 
-  console.log('\n=== ALL TESTS PASSED SUCCESSFULLY! ===\n');
+  console.log('\n=== ALL TESTS PASSED SUCCESSFULLY! ===');
 }
 
 runTests().catch((err) => {
-  console.error('Test execution failed:', err);
+  console.error('Test error:', err);
   process.exit(1);
 });

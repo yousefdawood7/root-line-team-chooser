@@ -114,7 +114,7 @@ function PrintContent() {
         {/* Header */}
         <div className="border-b-2 border-zinc-900 pb-5 flex items-start justify-between">
           <div className="flex items-center gap-3.5">
-            <div className="h-11 w-11 relative rounded-lg border border-zinc-200 bg-zinc-950 flex items-center justify-center p-1 shrink-0">
+            <div className="h-11 w-11 relative rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center shrink-0">
               <Image
                 src="/logo.svg"
                 alt="Root Line"

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   Search,
   Users,
@@ -10,9 +11,11 @@ import {
   RefreshCw,
   AlertTriangle,
   UserPlus,
+  Plus,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
+import { CandidateEditModal } from '@/components/CandidateEditModal';
 import { MyTeamDrawer } from '@/components/MyTeamDrawer';
 import { ProposeCandidateModal } from '@/components/ProposeCandidateModal';
 import { Candidate, DraftState, Lead, UserSession } from '@/lib/types';
@@ -39,6 +42,10 @@ export default function DraftPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isProposeOpen, setIsProposeOpen] = useState(false);
+
+  // Manual Add & Edit Candidate Modal
+  const [candidateToEdit, setCandidateToEdit] = useState<Candidate | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -125,6 +132,18 @@ export default function DraftPage() {
     }
   };
 
+  const handleDeleteCandidate = async (candidateId: string) => {
+    const res = await fetch(`/api/admin/candidates?id=${candidateId}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to delete candidate');
+    }
+    toast.success('Candidate permanently deleted');
+    await fetchData();
+  };
+
   const openPreview = (candidate: Candidate) => {
     setPreviewCandidate(candidate);
     setIsModalOpen(true);
@@ -206,6 +225,8 @@ export default function DraftPage() {
     ? (stats.myPicks / currentLead.quota) * 100
     : 0;
 
+  const isAdmin = currentUser?.role === 'admin';
+
   return (
     <div className="min-h-screen bg-zinc-50/50 text-zinc-950 flex flex-col">
       <Navbar
@@ -227,35 +248,53 @@ export default function DraftPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-xl font-bold tracking-tight">
-                  Candidate Selection Board
+                  {draftState?.settings.title || 'Candidate Selection Board'}
                 </CardTitle>
                 <p className="text-xs text-zinc-500 mt-1">
                   {currentLead
                     ? `Welcome, ${currentLead.name}. Select candidates or propose outside members.`
-                    : 'Candidate pool overview.'}
+                    : 'Live candidate selection and roster overview.'}
                 </p>
               </div>
 
-              {currentLead && (
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {isAdmin && (
                   <Button
-                    variant="outline"
-                    onClick={() => setIsProposeOpen(true)}
-                    className="flex items-center gap-1.5"
+                    size="sm"
+                    onClick={() => {
+                      setCandidateToEdit(null);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 cursor-pointer"
                   >
-                    <UserPlus className="w-4 h-4" />
-                    <span>Propose Member</span>
+                    <Plus className="w-4 h-4" />
+                    <span>Add Candidate</span>
                   </Button>
+                )}
 
-                  <Button
-                    onClick={() => setIsDrawerOpen(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>My Squad ({stats.myPicks} / {currentLead.quota})</span>
-                  </Button>
-                </div>
-              )}
+                {currentLead && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsProposeOpen(true)}
+                      className="flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>Propose Member</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      onClick={() => setIsDrawerOpen(true)}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>My Squad ({stats.myPicks} / {currentLead.quota})</span>
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
 
@@ -282,7 +321,7 @@ export default function DraftPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <Input
               type="text"
-              placeholder="Search by name, role, skills..."
+              placeholder="Search by candidate name, role, skills..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 bg-white"
@@ -342,7 +381,7 @@ export default function DraftPage() {
           </div>
         </div>
 
-        {/* Candidates Grid */}
+        {/* Candidates Grid with Prominent Assigned-By Attribution */}
         {filteredCandidates.length === 0 ? (
           <Card className="p-12 text-center bg-white border-zinc-200">
             <Users className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
@@ -350,7 +389,7 @@ export default function DraftPage() {
               No candidates found
             </p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Try adjusting your search query or filter.
+              Try adjusting your search query or department filter.
             </p>
           </Card>
         ) : (
@@ -371,9 +410,9 @@ export default function DraftPage() {
                   onClick={() => openPreview(candidate)}
                   className={`border transition-colors cursor-pointer bg-white flex flex-col justify-between ${
                     isAssignedToMe
-                      ? 'border-emerald-300'
+                      ? 'border-emerald-300 ring-1 ring-emerald-200'
                       : isAssignedToOther
-                      ? 'border-zinc-200 opacity-60'
+                      ? 'border-zinc-200 opacity-75'
                       : 'border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
@@ -395,13 +434,18 @@ export default function DraftPage() {
                         </div>
                       </div>
 
+                      {/* Prominent Status / Assigned-By Badge */}
                       {isAssignedToMe ? (
-                        <Badge variant="success" className="text-[10px] shrink-0">
-                          Selected
+                        <Badge variant="success" className="text-[10px] shrink-0 font-semibold">
+                          Assigned to: You
                         </Badge>
                       ) : isAssignedToOther ? (
-                        <Badge variant="secondary" className="text-[10px] text-zinc-500 shrink-0">
-                          Taken
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] text-zinc-900 bg-zinc-100 border border-zinc-200 shrink-0 font-medium max-w-[140px] truncate"
+                          title={`Assigned to: ${candidate.assignedToLeadName}`}
+                        >
+                          Assigned: {candidate.assignedToLeadName}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] font-normal text-zinc-500 shrink-0">
@@ -440,10 +484,21 @@ export default function DraftPage() {
                       </div>
                     )}
 
-                    <div className="pt-2 border-t border-zinc-100 flex items-center justify-between text-xs">
-                      <span className="text-zinc-400 text-[11px] flex items-center gap-1">
-                        <Eye className="w-3 h-3" /> Details
-                      </span>
+                    {/* Attribution & Actions Footer */}
+                    <div className="pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs">
+                      {isAssignedToOther ? (
+                        <span className="text-[11px] text-zinc-500 font-medium truncate max-w-[160px]">
+                          Drafted by: <strong className="text-zinc-900">{candidate.assignedToLeadName}</strong>
+                        </span>
+                      ) : isAssignedToMe ? (
+                        <span className="text-[11px] text-emerald-700 font-medium">
+                          Drafted by: <strong>Your Team</strong>
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400 text-[11px] flex items-center gap-1">
+                          <Eye className="w-3 h-3" /> Details
+                        </span>
+                      )}
 
                       {currentLead && !isAssigned && !isQuotaFull && !draftState?.settings.isLocked && (
                         <Button
@@ -458,12 +513,6 @@ export default function DraftPage() {
                           Select
                         </Button>
                       )}
-
-                      {isAssignedToOther && (
-                        <span className="text-[10px] text-zinc-400 truncate max-w-[140px]">
-                          {candidate.assignedToLeadName || 'Other Lead'}
-                        </span>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -473,7 +522,7 @@ export default function DraftPage() {
         )}
       </main>
 
-      {/* Candidate Preview Modal */}
+      {/* Candidate Preview Modal with Edit and Delete options for Admin */}
       <CandidatePreviewModal
         candidate={previewCandidate}
         currentUser={currentUser}
@@ -482,7 +531,21 @@ export default function DraftPage() {
         onClose={() => setIsModalOpen(false)}
         onPick={handlePickCandidate}
         onRelease={handleReleaseCandidate}
+        onEdit={(cand) => {
+          setCandidateToEdit(cand);
+          setIsEditModalOpen(true);
+        }}
+        onDelete={handleDeleteCandidate}
         isDraftLocked={draftState?.settings.isLocked}
+      />
+
+      {/* Candidate Manual Add & Edit Modal */}
+      <CandidateEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={() => fetchData()}
+        candidateToEdit={candidateToEdit}
+        leads={draftState?.leads || []}
       />
 
       {/* My Team Drawer */}

@@ -11,16 +11,20 @@ import {
   Plus,
   Trash2,
   Edit2,
+  Edit3,
   AlertCircle,
   RefreshCw,
   Printer,
   Check,
   X,
   UserCheck,
+  Search,
+  Users,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { ExcelUploader } from '@/components/ExcelUploader';
 import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
+import { CandidateEditModal } from '@/components/CandidateEditModal';
 import { Candidate, DraftState, Lead, UserSession } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,6 +60,10 @@ export default function AdminPage() {
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Editable session title
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInputVal, setTitleInputVal] = useState('');
+
   // Add lead form
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
@@ -63,9 +71,27 @@ export default function AdminPage() {
   const [addingLead, setAddingLead] = useState(false);
   const [leadError, setLeadError] = useState<string | null>(null);
 
-  // Edit lead modal
+  // Edit lead quota modal
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [editQuotaVal, setEditQuotaVal] = useState<string>('');
+
+  // Shadcn Dialog: Delete Lead confirmation
+  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [isDeleteLeadDialogOpen, setIsDeleteLeadDialogOpen] = useState(false);
+  const [deletingLead, setDeletingLead] = useState(false);
+
+  // Shadcn Dialog: Delete Candidate confirmation
+  const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
+  const [isDeleteCandidateDialogOpen, setIsDeleteCandidateDialogOpen] = useState(false);
+  const [deletingCandidate, setDeletingCandidate] = useState(false);
+
+  // Manual Candidate Add & Edit Modal
+  const [candidateToEdit, setCandidateToEdit] = useState<Candidate | null>(null);
+  const [isCandidateEditModalOpen, setIsCandidateEditModalOpen] = useState(false);
+
+  // Candidate Roster search & filter
+  const [candidateSearchQuery, setCandidateSearchQuery] = useState('');
+  const [candidateFilterStatus, setCandidateFilterStatus] = useState<'all' | 'assigned' | 'available'>('all');
 
   // Reset Confirmation Dialog
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
@@ -99,6 +125,7 @@ export default function AdminPage() {
       if (stateRes.ok) {
         const data = await stateRes.json();
         setDraftState(data);
+        setTitleInputVal(data?.settings?.title || 'Root Line Team Draft');
       }
     } catch (err) {
       console.error('Admin fetch error:', err);
@@ -219,6 +246,23 @@ export default function AdminPage() {
     router.push(url);
   };
 
+  const handleSaveTitle = async () => {
+    if (!titleInputVal.trim()) return;
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: titleInputVal.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to update session title');
+      setIsEditingTitle(false);
+      toast.success('Session title updated');
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update title');
+    }
+  };
+
   const handleAddLead = async (e: FormEvent) => {
     e.preventDefault();
     setLeadError(null);
@@ -250,18 +294,39 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteLead = async (leadId: string, leadName: string) => {
-    if (!confirm(`Are you sure you want to remove ${leadName}?`)) {
-      return;
-    }
+  const confirmDeleteLead = async () => {
+    if (!leadToDelete) return;
 
     try {
-      const res = await fetch(`/api/admin/leads?id=${leadId}`, { method: 'DELETE' });
+      setDeletingLead(true);
+      const res = await fetch(`/api/admin/leads?id=${leadToDelete.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete lead');
-      toast.success('Lead removed');
+      toast.success(`Removed team lead "${leadToDelete.name}"`);
+      setIsDeleteLeadDialogOpen(false);
+      setLeadToDelete(null);
       await fetchData();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete lead');
+    } finally {
+      setDeletingLead(false);
+    }
+  };
+
+  const confirmDeleteCandidate = async () => {
+    if (!candidateToDelete) return;
+
+    try {
+      setDeletingCandidate(true);
+      const res = await fetch(`/api/admin/candidates?id=${candidateToDelete.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete candidate');
+      toast.success(`Deleted candidate "${candidateToDelete.name}"`);
+      setIsDeleteCandidateDialogOpen(false);
+      setCandidateToDelete(null);
+      await fetchData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete candidate');
+    } finally {
+      setDeletingCandidate(false);
     }
   };
 
@@ -379,6 +444,22 @@ export default function AdminPage() {
   const pickedCandidates = approvedCandidates.filter((c) => c.assignedToLeadId).length;
   const availableCandidates = totalCandidates - pickedCandidates;
 
+  // Filtered candidate list for management table
+  const filteredCandidates = approvedCandidates.filter((c) => {
+    if (candidateFilterStatus === 'assigned' && !c.assignedToLeadId) return false;
+    if (candidateFilterStatus === 'available' && c.assignedToLeadId) return false;
+
+    if (candidateSearchQuery.trim()) {
+      const q = candidateSearchQuery.toLowerCase();
+      const matchName = c.name.toLowerCase().includes(q);
+      const matchRole = c.role?.toLowerCase().includes(q);
+      const matchDept = c.department?.toLowerCase().includes(q);
+      const matchLead = c.assignedToLeadName?.toLowerCase().includes(q);
+      return matchName || matchRole || matchDept || matchLead;
+    }
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-zinc-50/50 text-zinc-950 flex flex-col">
       <Navbar user={currentUser} />
@@ -387,20 +468,71 @@ export default function AdminPage() {
         {/* Header & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-              Admin Dashboard
-            </h1>
+            <div className="flex items-center gap-2">
+              {isEditingTitle ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="text"
+                    value={titleInputVal}
+                    onChange={(e) => setTitleInputVal(e.target.value)}
+                    className="h-8 text-sm font-bold max-w-xs bg-white"
+                    autoFocus
+                  />
+                  <Button size="sm" onClick={handleSaveTitle} className="h-8 text-xs px-2.5">
+                    <Check className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setIsEditingTitle(false)}
+                    className="h-8 text-xs px-2"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
+                    {draftState?.settings.title || 'Admin Dashboard'}
+                  </h1>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setTitleInputVal(draftState?.settings.title || 'Root Line Team Draft');
+                      setIsEditingTitle(true);
+                    }}
+                    title="Edit session title"
+                    className="h-7 w-7 text-zinc-400 hover:text-zinc-900 cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Manage authorized leads, review member proposals, and export rosters.
+              Manage authorized leads, review member proposals, modify draft board candidates, and export rosters.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              size="sm"
+              onClick={() => {
+                setCandidateToEdit(null);
+                setIsCandidateEditModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Candidate</span>
+            </Button>
+
+            <Button
               variant="outline"
               size="sm"
               onClick={handleToggleLock}
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-1.5 cursor-pointer"
             >
               {draftState?.settings.isLocked ? (
                 <>
@@ -448,7 +580,7 @@ export default function AdminPage() {
               variant="outline"
               size="sm"
               onClick={() => setIsResetDialogOpen(true)}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset All
             </Button>
@@ -594,18 +726,173 @@ export default function AdminPage() {
           </Card>
         )}
 
-        {/* File Ingestion */}
+        {/* File Ingestion with Column Mapping */}
         <Card className="border-zinc-200 bg-white">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">
-              Candidate Spreadsheet
+              Candidate Spreadsheet Ingestion
             </CardTitle>
             <CardDescription className="text-xs">
-              Upload an Excel or CSV file. Quotas automatically divide equally among leads, with any odd remainder assigned to a lead.
+              Upload an Excel or CSV file. Choose which column represents Candidate Name / Title so timestamps are never used as card titles.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ExcelUploader onUploadSuccess={() => fetchData()} />
+          </CardContent>
+        </Card>
+
+        {/* Full Draft Board Candidate Roster Management */}
+        <Card className="border-zinc-200 bg-white">
+          <CardHeader className="pb-3 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Draft Board Candidates ({approvedCandidates.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Edit candidate details, re-assign them to any team lead, return them to the open pool, or permanently delete them.
+              </CardDescription>
+            </div>
+
+            <Button
+              size="sm"
+              onClick={() => {
+                setCandidateToEdit(null);
+                setIsCandidateEditModalOpen(true);
+              }}
+              className="text-xs h-8 flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Candidate Manually</span>
+            </Button>
+          </CardHeader>
+
+          <CardContent className="space-y-3 pt-4">
+            {/* Search & Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by name, role, department, or lead..."
+                  value={candidateSearchQuery}
+                  onChange={(e) => setCandidateSearchQuery(e.target.value)}
+                  className="pl-8 bg-white h-8 text-xs"
+                />
+              </div>
+
+              <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 text-xs">
+                <button
+                  onClick={() => setCandidateFilterStatus('all')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
+                    candidateFilterStatus === 'all'
+                      ? 'bg-zinc-900 text-white'
+                      : 'text-zinc-600 hover:text-zinc-950'
+                  }`}
+                >
+                  All ({totalCandidates})
+                </button>
+                <button
+                  onClick={() => setCandidateFilterStatus('assigned')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
+                    candidateFilterStatus === 'assigned'
+                      ? 'bg-zinc-900 text-white'
+                      : 'text-zinc-600 hover:text-zinc-950'
+                  }`}
+                >
+                  Assigned ({pickedCandidates})
+                </button>
+                <button
+                  onClick={() => setCandidateFilterStatus('available')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
+                    candidateFilterStatus === 'available'
+                      ? 'bg-zinc-900 text-white'
+                      : 'text-zinc-600 hover:text-zinc-950'
+                  }`}
+                >
+                  Available ({availableCandidates})
+                </button>
+              </div>
+            </div>
+
+            {/* Candidates Table */}
+            <div className="border border-zinc-200 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-zinc-50">
+                    <TableHead className="font-semibold text-xs w-10">#</TableHead>
+                    <TableHead className="font-semibold text-xs">Candidate Name / Title</TableHead>
+                    <TableHead className="font-semibold text-xs">Assigned Lead</TableHead>
+                    <TableHead className="font-semibold text-xs">Role</TableHead>
+                    <TableHead className="font-semibold text-xs">Department</TableHead>
+                    <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCandidates.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-zinc-400 text-xs">
+                        No candidates match your filter. Click &ldquo;Add Candidate Manually&rdquo; to create one.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredCandidates.map((candidate, idx) => (
+                      <TableRow key={candidate.id} className="hover:bg-zinc-50/70">
+                        <TableCell className="font-mono text-xs text-zinc-400">{idx + 1}</TableCell>
+                        <TableCell className="font-semibold text-xs text-zinc-900">
+                          {candidate.name}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {candidate.assignedToLeadName ? (
+                            <Badge variant="secondary" className="font-medium text-xs">
+                              Assigned: {candidate.assignedToLeadName}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="font-normal text-xs text-zinc-500">
+                              Available Pool
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-zinc-600">
+                          {candidate.role || '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-zinc-600">
+                          {candidate.department || '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setCandidateToEdit(candidate);
+                                setIsCandidateEditModalOpen(true);
+                              }}
+                              title="Edit candidate & reassignment"
+                              className="h-7 w-7 text-zinc-500 hover:text-zinc-900 cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setCandidateToDelete(candidate);
+                                setIsDeleteCandidateDialogOpen(true);
+                              }}
+                              title="Delete candidate"
+                              className="h-7 w-7 text-zinc-400 hover:text-red-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -664,7 +951,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <Button type="submit" disabled={addingLead} size="sm" className="w-full sm:w-auto h-8 text-xs">
+              <Button type="submit" disabled={addingLead} size="sm" className="w-full sm:w-auto h-8 text-xs cursor-pointer">
                 <Plus className="w-3.5 h-3.5 mr-1" />
                 {addingLead ? 'Adding...' : 'Add Lead'}
               </Button>
@@ -731,15 +1018,18 @@ export default function AdminPage() {
                                     : ''
                                 );
                               }}
-                              className="h-7 w-7 text-zinc-400 hover:text-zinc-900"
+                              className="h-7 w-7 text-zinc-400 hover:text-zinc-900 cursor-pointer"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDeleteLead(lead.id, lead.name)}
-                              className="h-7 w-7 text-zinc-400 hover:text-red-600"
+                              onClick={() => {
+                                setLeadToDelete(lead);
+                                setIsDeleteLeadDialogOpen(true);
+                              }}
+                              className="h-7 w-7 text-zinc-400 hover:text-red-600 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
@@ -904,6 +1194,79 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Shadcn Dialog: Remove Team Lead Confirmation */}
+      <Dialog open={isDeleteLeadDialogOpen} onOpenChange={setIsDeleteLeadDialogOpen}>
+        <DialogContent className="max-w-md bg-white border-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-zinc-950">
+              Remove Team Lead
+            </DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500 mt-1">
+              Are you sure you want to remove <strong>{leadToDelete?.name}</strong> ({leadToDelete?.email})? Any candidates assigned to them will be returned to the open candidate pool.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex items-center gap-2 pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDeleteLeadDialogOpen(false)}
+              disabled={deletingLead}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDeleteLead}
+              disabled={deletingLead}
+            >
+              {deletingLead ? 'Removing...' : 'Yes, Remove Lead'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Shadcn Dialog: Delete Candidate Confirmation */}
+      <Dialog open={isDeleteCandidateDialogOpen} onOpenChange={setIsDeleteCandidateDialogOpen}>
+        <DialogContent className="max-w-md bg-white border-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-zinc-950">
+              Delete Candidate from Draft Board
+            </DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500 mt-1">
+              Are you sure you want to permanently delete <strong>{candidateToDelete?.name}</strong>? This action will remove them from the draft board and adjust team quotas accordingly.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex items-center gap-2 pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDeleteCandidateDialogOpen(false)}
+              disabled={deletingCandidate}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDeleteCandidate}
+              disabled={deletingCandidate}
+            >
+              {deletingCandidate ? 'Deleting...' : 'Yes, Delete Candidate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Add & Edit Candidate Modal */}
+      <CandidateEditModal
+        isOpen={isCandidateEditModalOpen}
+        onClose={() => setIsCandidateEditModalOpen(false)}
+        onSuccess={() => fetchData()}
+        candidateToEdit={candidateToEdit}
+        leads={draftState?.leads || []}
+      />
+
       {/* Candidate Preview Modal for Admin */}
       <CandidatePreviewModal
         candidate={selectedCandidate}
@@ -913,6 +1276,17 @@ export default function AdminPage() {
         onClose={() => setIsPreviewOpen(false)}
         onPick={async () => {}}
         onRelease={handleAdminReleaseCandidate}
+        onEdit={(cand) => {
+          setCandidateToEdit(cand);
+          setIsCandidateEditModalOpen(true);
+        }}
+        onDelete={async (id) => {
+          const cand = approvedCandidates.find((c) => c.id === id);
+          if (cand) {
+            setCandidateToDelete(cand);
+            setIsDeleteCandidateDialogOpen(true);
+          }
+        }}
         isDraftLocked={draftState?.settings.isLocked}
       />
     </div>

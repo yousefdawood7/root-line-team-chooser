@@ -32,7 +32,7 @@ export function Navbar({ user, lead }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand with Official Rootline Logo */}
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="h-9 w-9 relative rounded-lg overflow-hidden border border-zinc-200 bg-zinc-950 flex items-center justify-center shrink-0">
+          <div className="h-9 w-9 relative rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center shrink-0">
             <Image
               src="/logo.svg"
               alt="Root Line"
