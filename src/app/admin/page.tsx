@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useReducer, useEffect, useCallback, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -25,7 +25,7 @@ import { Navbar } from '@/components/Navbar';
 import { ExcelUploader } from '@/components/ExcelUploader';
 import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
 import { CandidateEditModal } from '@/components/CandidateEditModal';
-import { Candidate, DraftState, Lead, UserSession } from '@/lib/types';
+import { adminReducer, initialAdminState } from '@/reducers/adminReducer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -56,56 +56,38 @@ import {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
-  const [draftState, setDraftState] = useState<DraftState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, dispatch] = useReducer(adminReducer, initialAdminState);
 
-  // Editable session title
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleInputVal, setTitleInputVal] = useState('');
-
-  // Add lead form
-  const [newEmail, setNewEmail] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newQuota, setNewQuota] = useState('');
-  const [addingLead, setAddingLead] = useState(false);
-  const [leadError, setLeadError] = useState<string | null>(null);
-
-  // Edit lead quota modal
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [editQuotaVal, setEditQuotaVal] = useState<string>('');
-
-  // Shadcn Dialog: Delete Lead confirmation
-  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
-  const [isDeleteLeadDialogOpen, setIsDeleteLeadDialogOpen] = useState(false);
-  const [deletingLead, setDeletingLead] = useState(false);
-
-  // Shadcn Dialog: Delete Candidate confirmation
-  const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
-  const [isDeleteCandidateDialogOpen, setIsDeleteCandidateDialogOpen] = useState(false);
-  const [deletingCandidate, setDeletingCandidate] = useState(false);
-
-  // Manual Candidate Add & Edit Modal
-  const [candidateToEdit, setCandidateToEdit] = useState<Candidate | null>(null);
-  const [isCandidateEditModalOpen, setIsCandidateEditModalOpen] = useState(false);
-
-  // Candidate Roster search & filter
-  const [candidateSearchQuery, setCandidateSearchQuery] = useState('');
-  const [candidateFilterStatus, setCandidateFilterStatus] = useState<'all' | 'assigned' | 'available'>('all');
-
-  // Reset Confirmation Dialog
-  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
-  const [resetting, setResetting] = useState(false);
-
-  // Selected candidate preview
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-  // Proposal actions loading
-  const [proposalActionLoading, setProposalActionLoading] = useState<string | null>(null);
-
-  // Download loading indicator
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const {
+    currentUser,
+    draftState,
+    loading,
+    isEditingTitle,
+    titleInputVal,
+    newEmail,
+    newName,
+    newQuota,
+    addingLead,
+    leadError,
+    editingLead,
+    editQuotaVal,
+    leadToDelete,
+    isDeleteLeadDialogOpen,
+    deletingLead,
+    candidateToDelete,
+    isDeleteCandidateDialogOpen,
+    deletingCandidate,
+    candidateToEdit,
+    isCandidateEditModalOpen,
+    candidateSearchQuery,
+    candidateFilterStatus,
+    isResetDialogOpen,
+    resetting,
+    selectedCandidate,
+    isPreviewOpen,
+    proposalActionLoading,
+    downloadingId,
+  } = state;
 
   const fetchData = useCallback(async () => {
     try {
@@ -119,18 +101,16 @@ export default function AdminPage() {
         router.push('/login');
         return;
       }
-      setCurrentUser(meData.user);
 
       const stateRes = await fetch('/api/draft/state');
       if (stateRes.ok) {
         const data = await stateRes.json();
-        setDraftState(data);
-        setTitleInputVal(data?.settings?.title || 'Root Line Team Draft');
+        dispatch({ type: 'SET_LOAD_DATA', user: meData.user, state: data });
       }
     } catch (err) {
       console.error('Admin fetch error:', err);
     } finally {
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', loading: false });
     }
   }, [router]);
 
@@ -164,7 +144,7 @@ export default function AdminPage() {
     }
 
     try {
-      setDownloadingId(`pdf_${leadId || 'all'}`);
+      dispatch({ type: 'SET_DOWNLOADING_ID', id: `pdf_${leadId || 'all'}` });
       const url = leadId ? `/api/admin/pdf?leadId=${leadId}` : '/api/admin/pdf';
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to download PDF');
@@ -184,7 +164,7 @@ export default function AdminPage() {
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Download error');
     } finally {
-      setDownloadingId(null);
+      dispatch({ type: 'SET_DOWNLOADING_ID', id: null });
     }
   };
 
@@ -206,7 +186,7 @@ export default function AdminPage() {
     }
 
     try {
-      setDownloadingId(`xlsx_${leadId || 'all'}`);
+      dispatch({ type: 'SET_DOWNLOADING_ID', id: `xlsx_${leadId || 'all'}` });
       const url = leadId ? `/api/admin/export?leadId=${leadId}` : '/api/admin/export';
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to download Excel');
@@ -226,7 +206,7 @@ export default function AdminPage() {
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Download error');
     } finally {
-      setDownloadingId(null);
+      dispatch({ type: 'SET_DOWNLOADING_ID', id: null });
     }
   };
 
@@ -255,7 +235,7 @@ export default function AdminPage() {
         body: JSON.stringify({ title: titleInputVal.trim() }),
       });
       if (!res.ok) throw new Error('Failed to update session title');
-      setIsEditingTitle(false);
+      dispatch({ type: 'CANCEL_EDIT_TITLE' });
       toast.success('Session title updated');
       await fetchData();
     } catch (err: unknown) {
@@ -265,8 +245,8 @@ export default function AdminPage() {
 
   const handleAddLead = async (e: FormEvent) => {
     e.preventDefault();
-    setLeadError(null);
-    setAddingLead(true);
+    dispatch({ type: 'SET_LEAD_ERROR', error: null });
+    dispatch({ type: 'SET_ADDING_LEAD', adding: true });
 
     try {
       const res = await fetch('/api/admin/leads', {
@@ -282,15 +262,13 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to add lead');
 
-      setNewEmail('');
-      setNewName('');
-      setNewQuota('');
+      dispatch({ type: 'RESET_NEW_LEAD_FORM' });
       toast.success('Team lead added successfully');
       await fetchData();
     } catch (err: unknown) {
-      setLeadError(err instanceof Error ? err.message : 'Error adding lead');
+      dispatch({ type: 'SET_LEAD_ERROR', error: err instanceof Error ? err.message : 'Error adding lead' });
     } finally {
-      setAddingLead(false);
+      dispatch({ type: 'SET_ADDING_LEAD', adding: false });
     }
   };
 
@@ -298,17 +276,16 @@ export default function AdminPage() {
     if (!leadToDelete) return;
 
     try {
-      setDeletingLead(true);
+      dispatch({ type: 'SET_DELETING_LEAD', deleting: true });
       const res = await fetch(`/api/admin/leads?id=${leadToDelete.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete lead');
       toast.success(`Removed team lead "${leadToDelete.name}"`);
-      setIsDeleteLeadDialogOpen(false);
-      setLeadToDelete(null);
+      dispatch({ type: 'CLOSE_DELETE_LEAD_DIALOG' });
       await fetchData();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete lead');
     } finally {
-      setDeletingLead(false);
+      dispatch({ type: 'SET_DELETING_LEAD', deleting: false });
     }
   };
 
@@ -316,17 +293,16 @@ export default function AdminPage() {
     if (!candidateToDelete) return;
 
     try {
-      setDeletingCandidate(true);
+      dispatch({ type: 'SET_DELETING_CANDIDATE', deleting: true });
       const res = await fetch(`/api/admin/candidates?id=${candidateToDelete.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete candidate');
       toast.success(`Deleted candidate "${candidateToDelete.name}"`);
-      setIsDeleteCandidateDialogOpen(false);
-      setCandidateToDelete(null);
+      dispatch({ type: 'CLOSE_DELETE_CANDIDATE_DIALOG' });
       await fetchData();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete candidate');
     } finally {
-      setDeletingCandidate(false);
+      dispatch({ type: 'SET_DELETING_CANDIDATE', deleting: false });
     }
   };
 
@@ -343,7 +319,7 @@ export default function AdminPage() {
         }),
       });
       if (!res.ok) throw new Error('Failed to update quota');
-      setEditingLead(null);
+      dispatch({ type: 'CLOSE_EDIT_QUOTA' });
       toast.success('Quota updated');
       await fetchData();
     } catch (err: unknown) {
@@ -370,16 +346,16 @@ export default function AdminPage() {
 
   const confirmResetDraft = async () => {
     try {
-      setResetting(true);
+      dispatch({ type: 'SET_RESETTING', resetting: true });
       const res = await fetch('/api/admin/reset', { method: 'POST' });
       if (!res.ok) throw new Error('Failed to reset draft');
-      setIsResetDialogOpen(false);
+      dispatch({ type: 'CLOSE_RESET_DIALOG' });
       toast.success('All picks have been reset');
       await fetchData();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to reset draft');
     } finally {
-      setResetting(false);
+      dispatch({ type: 'SET_RESETTING', resetting: false });
     }
   };
 
@@ -397,12 +373,12 @@ export default function AdminPage() {
 
     toast.success('Candidate released to available pool');
     await fetchData();
-    setIsPreviewOpen(false);
+    dispatch({ type: 'CLOSE_PREVIEW' });
   };
 
   const handleProcessProposal = async (candidateId: string, action: 'approve' | 'reject') => {
     try {
-      setProposalActionLoading(candidateId);
+      dispatch({ type: 'SET_PROPOSAL_LOADING', id: candidateId });
       const res = await fetch('/api/admin/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -417,7 +393,7 @@ export default function AdminPage() {
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to process proposal');
     } finally {
-      setProposalActionLoading(null);
+      dispatch({ type: 'SET_PROPOSAL_LOADING', id: null });
     }
   };
 
@@ -474,7 +450,7 @@ export default function AdminPage() {
                   <Input
                     type="text"
                     value={titleInputVal}
-                    onChange={(e) => setTitleInputVal(e.target.value)}
+                    onChange={(e) => dispatch({ type: 'SET_TITLE_INPUT', val: e.target.value })}
                     className="h-8 text-sm font-bold max-w-xs bg-white"
                     autoFocus
                   />
@@ -484,7 +460,7 @@ export default function AdminPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setIsEditingTitle(false)}
+                    onClick={() => dispatch({ type: 'CANCEL_EDIT_TITLE' })}
                     className="h-8 text-xs px-2"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -499,8 +475,10 @@ export default function AdminPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => {
-                      setTitleInputVal(draftState?.settings.title || 'Root Line Team Draft');
-                      setIsEditingTitle(true);
+                      dispatch({
+                        type: 'START_EDIT_TITLE',
+                        currentTitle: draftState?.settings.title || 'Root Line Team Draft',
+                      });
                     }}
                     title="Edit session title"
                     className="h-7 w-7 text-zinc-400 hover:text-zinc-900 cursor-pointer"
@@ -519,8 +497,7 @@ export default function AdminPage() {
             <Button
               size="sm"
               onClick={() => {
-                setCandidateToEdit(null);
-                setIsCandidateEditModalOpen(true);
+                dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: null });
               }}
               className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800"
             >
@@ -579,7 +556,7 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsResetDialogOpen(true)}
+              onClick={() => dispatch({ type: 'OPEN_RESET_DIALOG' })}
               className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset All
@@ -757,8 +734,7 @@ export default function AdminPage() {
             <Button
               size="sm"
               onClick={() => {
-                setCandidateToEdit(null);
-                setIsCandidateEditModalOpen(true);
+                dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: null });
               }}
               className="text-xs h-8 flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
             >
@@ -776,14 +752,14 @@ export default function AdminPage() {
                   type="text"
                   placeholder="Search by name, role, department, or lead..."
                   value={candidateSearchQuery}
-                  onChange={(e) => setCandidateSearchQuery(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'SET_CANDIDATE_SEARCH', query: e.target.value })}
                   className="pl-8 bg-white h-8 text-xs"
                 />
               </div>
 
               <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 text-xs">
                 <button
-                  onClick={() => setCandidateFilterStatus('all')}
+                  onClick={() => dispatch({ type: 'SET_CANDIDATE_FILTER', status: 'all' })}
                   className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
                     candidateFilterStatus === 'all'
                       ? 'bg-zinc-900 text-white'
@@ -793,7 +769,7 @@ export default function AdminPage() {
                   All ({totalCandidates})
                 </button>
                 <button
-                  onClick={() => setCandidateFilterStatus('assigned')}
+                  onClick={() => dispatch({ type: 'SET_CANDIDATE_FILTER', status: 'assigned' })}
                   className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
                     candidateFilterStatus === 'assigned'
                       ? 'bg-zinc-900 text-white'
@@ -803,7 +779,7 @@ export default function AdminPage() {
                   Assigned ({pickedCandidates})
                 </button>
                 <button
-                  onClick={() => setCandidateFilterStatus('available')}
+                  onClick={() => dispatch({ type: 'SET_CANDIDATE_FILTER', status: 'available' })}
                   className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer text-xs ${
                     candidateFilterStatus === 'available'
                       ? 'bg-zinc-900 text-white'
@@ -865,8 +841,7 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                setCandidateToEdit(candidate);
-                                setIsCandidateEditModalOpen(true);
+                                dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate });
                               }}
                               title="Edit candidate & reassignment"
                               className="h-7 w-7 text-zinc-500 hover:text-zinc-900 cursor-pointer"
@@ -877,8 +852,7 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                setCandidateToDelete(candidate);
-                                setIsDeleteCandidateDialogOpen(true);
+                                dispatch({ type: 'OPEN_DELETE_CANDIDATE_DIALOG', candidate });
                               }}
                               title="Delete candidate"
                               className="h-7 w-7 text-zinc-400 hover:text-red-600 cursor-pointer"
@@ -919,7 +893,7 @@ export default function AdminPage() {
                   required
                   placeholder="lead@company.com"
                   value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newEmail', value: e.target.value })}
                   className="bg-white h-8 text-xs"
                 />
               </div>
@@ -932,7 +906,7 @@ export default function AdminPage() {
                   type="text"
                   placeholder="Full Name"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newName', value: e.target.value })}
                   className="bg-white h-8 text-xs"
                 />
               </div>
@@ -946,7 +920,7 @@ export default function AdminPage() {
                   min="1"
                   placeholder="Auto"
                   value={newQuota}
-                  onChange={(e) => setNewQuota(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'SET_NEW_LEAD_FIELD', field: 'newQuota', value: e.target.value })}
                   className="bg-white h-8 text-xs"
                 />
               </div>
@@ -1011,12 +985,7 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                setEditingLead(lead);
-                                setEditQuotaVal(
-                                  lead.customQuota !== undefined && lead.customQuota !== null
-                                    ? String(lead.customQuota)
-                                    : ''
-                                );
+                                dispatch({ type: 'OPEN_EDIT_QUOTA', lead });
                               }}
                               className="h-7 w-7 text-zinc-400 hover:text-zinc-900 cursor-pointer"
                             >
@@ -1026,8 +995,7 @@ export default function AdminPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                setLeadToDelete(lead);
-                                setIsDeleteLeadDialogOpen(true);
+                                dispatch({ type: 'OPEN_DELETE_LEAD_DIALOG', lead });
                               }}
                               className="h-7 w-7 text-zinc-400 hover:text-red-600 cursor-pointer"
                             >
@@ -1084,8 +1052,7 @@ export default function AdminPage() {
                             <div
                               key={member.id}
                               onClick={() => {
-                                setSelectedCandidate(member);
-                                setIsPreviewOpen(true);
+                                dispatch({ type: 'OPEN_PREVIEW', candidate: member });
                               }}
                               className="p-2 rounded-md bg-white border border-zinc-200 flex items-center justify-between text-xs cursor-pointer hover:border-zinc-400 transition"
                             >
@@ -1146,11 +1113,11 @@ export default function AdminPage() {
                 min="0"
                 placeholder="Auto"
                 value={editQuotaVal}
-                onChange={(e) => setEditQuotaVal(e.target.value)}
+                onChange={(e) => dispatch({ type: 'SET_EDIT_QUOTA_VAL', val: e.target.value })}
                 className="bg-white text-xs h-8"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditingLead(null)}>
+                <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'CLOSE_EDIT_QUOTA' })}>
                   Cancel
                 </Button>
                 <Button size="sm" onClick={handleUpdateQuota}>
@@ -1163,7 +1130,7 @@ export default function AdminPage() {
       )}
 
       {/* Reset Confirmation Dialog */}
-      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+      <Dialog open={isResetDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_RESET_DIALOG' })}>
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950">
@@ -1177,7 +1144,7 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsResetDialogOpen(false)}
+              onClick={() => dispatch({ type: 'CLOSE_RESET_DIALOG' })}
               disabled={resetting}
             >
               Cancel
@@ -1195,7 +1162,7 @@ export default function AdminPage() {
       </Dialog>
 
       {/* Shadcn Dialog: Remove Team Lead Confirmation */}
-      <Dialog open={isDeleteLeadDialogOpen} onOpenChange={setIsDeleteLeadDialogOpen}>
+      <Dialog open={isDeleteLeadDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_DELETE_LEAD_DIALOG' })}>
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950">
@@ -1209,7 +1176,7 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsDeleteLeadDialogOpen(false)}
+              onClick={() => dispatch({ type: 'CLOSE_DELETE_LEAD_DIALOG' })}
               disabled={deletingLead}
             >
               Cancel
@@ -1227,7 +1194,7 @@ export default function AdminPage() {
       </Dialog>
 
       {/* Shadcn Dialog: Delete Candidate Confirmation */}
-      <Dialog open={isDeleteCandidateDialogOpen} onOpenChange={setIsDeleteCandidateDialogOpen}>
+      <Dialog open={isDeleteCandidateDialogOpen} onOpenChange={(open) => !open && dispatch({ type: 'CLOSE_DELETE_CANDIDATE_DIALOG' })}>
         <DialogContent className="max-w-md bg-white border-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-zinc-950">
@@ -1241,7 +1208,7 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsDeleteCandidateDialogOpen(false)}
+              onClick={() => dispatch({ type: 'CLOSE_DELETE_CANDIDATE_DIALOG' })}
               disabled={deletingCandidate}
             >
               Cancel
@@ -1261,7 +1228,7 @@ export default function AdminPage() {
       {/* Manual Add & Edit Candidate Modal */}
       <CandidateEditModal
         isOpen={isCandidateEditModalOpen}
-        onClose={() => setIsCandidateEditModalOpen(false)}
+        onClose={() => dispatch({ type: 'CLOSE_CANDIDATE_EDIT_MODAL' })}
         onSuccess={() => fetchData()}
         candidateToEdit={candidateToEdit}
         leads={draftState?.leads || []}
@@ -1273,18 +1240,16 @@ export default function AdminPage() {
         currentUser={currentUser}
         currentLead={null}
         isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
+        onClose={() => dispatch({ type: 'CLOSE_PREVIEW' })}
         onPick={async () => {}}
         onRelease={handleAdminReleaseCandidate}
         onEdit={(cand) => {
-          setCandidateToEdit(cand);
-          setIsCandidateEditModalOpen(true);
+          dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: cand });
         }}
         onDelete={async (id) => {
           const cand = approvedCandidates.find((c) => c.id === id);
           if (cand) {
-            setCandidateToDelete(cand);
-            setIsDeleteCandidateDialogOpen(true);
+            dispatch({ type: 'OPEN_DELETE_CANDIDATE_DIALOG', candidate: cand });
           }
         }}
         isDraftLocked={draftState?.settings.isLocked}

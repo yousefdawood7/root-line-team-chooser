@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useReducer, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -18,7 +18,8 @@ import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
 import { CandidateEditModal } from '@/components/CandidateEditModal';
 import { MyTeamDrawer } from '@/components/MyTeamDrawer';
 import { ProposeCandidateModal } from '@/components/ProposeCandidateModal';
-import { Candidate, DraftState, Lead, UserSession } from '@/lib/types';
+import { Candidate } from '@/lib/types';
+import { draftReducer, initialDraftBoardState } from '@/reducers/draftReducer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -27,25 +28,23 @@ import { Progress } from '@/components/ui/progress';
 
 export default function DraftPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
-  const [currentLead, setCurrentLead] = useState<Lead | null>(null);
-  const [draftState, setDraftState] = useState<DraftState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, dispatch] = useReducer(draftReducer, initialDraftBoardState);
 
-  // Filter & Search states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'mine' | 'others'>('all');
-  const [selectedDept, setSelectedDept] = useState<string>('all');
-
-  // Modal & Drawer states
-  const [previewCandidate, setPreviewCandidate] = useState<Candidate | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isProposeOpen, setIsProposeOpen] = useState(false);
-
-  // Manual Add & Edit Candidate Modal
-  const [candidateToEdit, setCandidateToEdit] = useState<Candidate | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const {
+    currentUser,
+    currentLead,
+    draftState,
+    loading,
+    searchQuery,
+    statusFilter,
+    selectedDept,
+    previewCandidate,
+    isModalOpen,
+    isDrawerOpen,
+    isProposeOpen,
+    candidateToEdit,
+    isEditModalOpen,
+  } = state;
 
   const fetchData = useCallback(async () => {
     try {
@@ -55,25 +54,30 @@ export default function DraftPage() {
         return;
       }
       const meData = await meRes.json();
-      setCurrentUser(meData.user);
-      setCurrentLead(meData.lead);
 
       const stateRes = await fetch('/api/draft/state');
       if (stateRes.ok) {
-        const stateData: DraftState = await stateRes.json();
-        setDraftState(stateData);
-
+        const stateData = await stateRes.json();
+        let resolvedLead = meData.lead;
         if (meData.user?.role === 'lead') {
-          const freshLead = stateData.leads.find(
-            (l) => l.id === meData.user.leadId || l.email.toLowerCase() === meData.user.email.toLowerCase()
+          const freshLead = stateData.leads?.find(
+            (l: { id: string; email: string }) =>
+              l.id === meData.user.leadId || l.email.toLowerCase() === meData.user.email.toLowerCase()
           );
-          if (freshLead) setCurrentLead(freshLead);
+          if (freshLead) resolvedLead = freshLead;
         }
+
+        dispatch({
+          type: 'SET_LOAD_DATA',
+          user: meData.user,
+          lead: resolvedLead,
+          draftState: stateData,
+        });
       }
     } catch (err) {
       console.error('Failed to fetch draft data:', err);
     } finally {
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', loading: false });
     }
   }, [router]);
 
@@ -103,7 +107,7 @@ export default function DraftPage() {
     await fetchData();
 
     if (previewCandidate && previewCandidate.id === candidateId && data.candidate) {
-      setPreviewCandidate(data.candidate);
+      dispatch({ type: 'UPDATE_PREVIEW_CANDIDATE', candidate: data.candidate });
     }
   };
 
@@ -122,12 +126,15 @@ export default function DraftPage() {
     await fetchData();
 
     if (previewCandidate && previewCandidate.id === candidateId) {
-      setPreviewCandidate({
-        ...previewCandidate,
-        assignedToLeadId: null,
-        assignedToLeadName: null,
-        assignedToLeadEmail: null,
-        assignedAt: null,
+      dispatch({
+        type: 'UPDATE_PREVIEW_CANDIDATE',
+        candidate: {
+          ...previewCandidate,
+          assignedToLeadId: null,
+          assignedToLeadName: null,
+          assignedToLeadEmail: null,
+          assignedAt: null,
+        },
       });
     }
   };
@@ -145,8 +152,7 @@ export default function DraftPage() {
   };
 
   const openPreview = (candidate: Candidate) => {
-    setPreviewCandidate(candidate);
-    setIsModalOpen(true);
+    dispatch({ type: 'OPEN_PREVIEW', candidate });
   };
 
   // Only show approved candidates in public catalog
@@ -262,8 +268,7 @@ export default function DraftPage() {
                   <Button
                     size="sm"
                     onClick={() => {
-                      setCandidateToEdit(null);
-                      setIsEditModalOpen(true);
+                      dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: null });
                     }}
                     className="flex items-center gap-1.5 cursor-pointer"
                   >
@@ -277,7 +282,7 @@ export default function DraftPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setIsProposeOpen(true)}
+                      onClick={() => dispatch({ type: 'SET_PROPOSE_OPEN', open: true })}
                       className="flex items-center gap-1.5 cursor-pointer"
                     >
                       <UserPlus className="w-4 h-4" />
@@ -286,7 +291,7 @@ export default function DraftPage() {
 
                     <Button
                       size="sm"
-                      onClick={() => setIsDrawerOpen(true)}
+                      onClick={() => dispatch({ type: 'SET_DRAWER_OPEN', open: true })}
                       className="flex items-center gap-2 cursor-pointer"
                     >
                       <Users className="w-4 h-4" />
@@ -323,7 +328,7 @@ export default function DraftPage() {
               type="text"
               placeholder="Search by candidate name, role, skills..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => dispatch({ type: 'SET_SEARCH_QUERY', query: e.target.value })}
               className="pl-9 bg-white"
             />
           </div>
@@ -331,7 +336,7 @@ export default function DraftPage() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 text-xs">
               <button
-                onClick={() => setStatusFilter('all')}
+                onClick={() => dispatch({ type: 'SET_STATUS_FILTER', filter: 'all' })}
                 className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
                   statusFilter === 'all'
                     ? 'bg-zinc-900 text-white'
@@ -341,7 +346,7 @@ export default function DraftPage() {
                 All ({stats.total})
               </button>
               <button
-                onClick={() => setStatusFilter('available')}
+                onClick={() => dispatch({ type: 'SET_STATUS_FILTER', filter: 'available' })}
                 className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
                   statusFilter === 'available'
                     ? 'bg-zinc-900 text-white'
@@ -352,7 +357,7 @@ export default function DraftPage() {
               </button>
               {currentLead && (
                 <button
-                  onClick={() => setStatusFilter('mine')}
+                  onClick={() => dispatch({ type: 'SET_STATUS_FILTER', filter: 'mine' })}
                   className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
                     statusFilter === 'mine'
                       ? 'bg-zinc-900 text-white'
@@ -367,7 +372,7 @@ export default function DraftPage() {
             {departments.length > 0 && (
               <select
                 value={selectedDept}
-                onChange={(e) => setSelectedDept(e.target.value)}
+                onChange={(e) => dispatch({ type: 'SET_SELECTED_DEPT', dept: e.target.value })}
                 className="h-9 text-xs px-3 rounded-md border border-zinc-200 bg-white text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-950"
               >
                 <option value="all">All Departments</option>
@@ -528,12 +533,11 @@ export default function DraftPage() {
         currentUser={currentUser}
         currentLead={currentLead}
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => dispatch({ type: 'CLOSE_PREVIEW' })}
         onPick={handlePickCandidate}
         onRelease={handleReleaseCandidate}
         onEdit={(cand) => {
-          setCandidateToEdit(cand);
-          setIsEditModalOpen(true);
+          dispatch({ type: 'OPEN_CANDIDATE_EDIT_MODAL', candidate: cand });
         }}
         onDelete={handleDeleteCandidate}
         isDraftLocked={draftState?.settings.isLocked}
@@ -542,7 +546,7 @@ export default function DraftPage() {
       {/* Candidate Manual Add & Edit Modal */}
       <CandidateEditModal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
+        onClose={() => dispatch({ type: 'CLOSE_CANDIDATE_EDIT_MODAL' })}
         onSuccess={() => fetchData()}
         candidateToEdit={candidateToEdit}
         leads={draftState?.leads || []}
@@ -551,7 +555,7 @@ export default function DraftPage() {
       {/* My Team Drawer */}
       <MyTeamDrawer
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={() => dispatch({ type: 'SET_DRAWER_OPEN', open: false })}
         lead={currentLead}
         candidates={draftState?.candidates || []}
         onSelectCandidate={openPreview}
@@ -561,7 +565,7 @@ export default function DraftPage() {
       {/* Propose Candidate Modal */}
       <ProposeCandidateModal
         isOpen={isProposeOpen}
-        onClose={() => setIsProposeOpen(false)}
+        onClose={() => dispatch({ type: 'SET_PROPOSE_OPEN', open: false })}
         onSuccess={() => fetchData()}
       />
     </div>

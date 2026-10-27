@@ -1,6 +1,6 @@
 "use client";
 
-import { SubmitEventHandler, useState, type FormEvent } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { UserPlus, Edit3, AlertCircle } from "lucide-react";
 import { Candidate, Lead } from "@/lib/types";
