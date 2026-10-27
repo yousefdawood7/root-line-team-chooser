@@ -21,7 +21,6 @@ const INITIAL_STATE: DraftState = {
       id: 'lead-1',
       email: 'lead1@rootline.com',
       name: 'Team Lead 1',
-      avatarColor: 'bg-indigo-500',
       quota: 0,
       pickedCount: 0,
       createdAt: new Date().toISOString(),
@@ -30,7 +29,6 @@ const INITIAL_STATE: DraftState = {
       id: 'lead-2',
       email: 'lead2@rootline.com',
       name: 'Team Lead 2',
-      avatarColor: 'bg-emerald-500',
       quota: 0,
       pickedCount: 0,
       createdAt: new Date().toISOString(),
@@ -41,18 +39,25 @@ const INITIAL_STATE: DraftState = {
   version: 1,
 };
 
+// In-memory fallback if both Vercel Blob and filesystem are unavailable
+let memoryState: DraftState = JSON.parse(JSON.stringify(INITIAL_STATE));
+
 function hasBlobToken(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
-// Ensure local directory exists
-function ensureLocalDir() {
-  if (!fs.existsSync(LOCAL_DATA_DIR)) {
-    fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
+function safeEnsureLocalDir(): boolean {
+  try {
+    if (!fs.existsSync(LOCAL_DATA_DIR)) {
+      fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
+    }
+    return true;
+  } catch (e) {
+    // Read-only filesystem (e.g. Vercel serverless environment)
+    return false;
   }
 }
 
-// In-memory mutex for synchronous local state operations
 let stateLock: Promise<any> = Promise.resolve();
 
 async function withLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -72,28 +77,41 @@ export async function getDraftState(): Promise<DraftState> {
         const res = await fetch(blobs[0].url, { cache: 'no-store' });
         if (res.ok) {
           const data = (await res.json()) as DraftState;
+          memoryState = data;
           return data;
         }
+      } else {
+        // Blob store exists but no state file has been created yet: initialize it directly in Blob!
+        await put(BLOB_STATE_FILENAME, JSON.stringify(INITIAL_STATE, null, 2), {
+          access: 'public',
+          addRandomSuffix: false,
+          contentType: 'application/json',
+        });
+        memoryState = JSON.parse(JSON.stringify(INITIAL_STATE));
+        return INITIAL_STATE;
       }
     } catch (err) {
-      console.warn('Could not read from Vercel Blob, checking fallback:', err);
+      console.warn('Vercel Blob access error, checking local/memory:', err);
     }
   }
 
-  // Local fallback
-  ensureLocalDir();
-  if (fs.existsSync(LOCAL_STATE_FILE)) {
+  // Local fallback (only for local development)
+  if (safeEnsureLocalDir()) {
     try {
-      const content = fs.readFileSync(LOCAL_STATE_FILE, 'utf-8');
-      return JSON.parse(content) as DraftState;
+      if (fs.existsSync(LOCAL_STATE_FILE)) {
+        const content = fs.readFileSync(LOCAL_STATE_FILE, 'utf-8');
+        const parsed = JSON.parse(content) as DraftState;
+        memoryState = parsed;
+        return parsed;
+      }
+      fs.writeFileSync(LOCAL_STATE_FILE, JSON.stringify(INITIAL_STATE, null, 2), 'utf-8');
+      return INITIAL_STATE;
     } catch (e) {
-      console.error('Error reading local state file:', e);
+      console.warn('Filesystem access failed, using memory state:', e);
     }
   }
 
-  // If no state exists yet, save initial state and return it
-  await saveDraftState(INITIAL_STATE);
-  return INITIAL_STATE;
+  return memoryState;
 }
 
 /**
@@ -101,6 +119,7 @@ export async function getDraftState(): Promise<DraftState> {
  */
 export async function saveDraftState(state: DraftState): Promise<void> {
   state.version = (state.version || 0) + 1;
+  memoryState = state;
   const jsonContent = JSON.stringify(state, null, 2);
 
   if (hasBlobToken()) {
@@ -112,13 +131,18 @@ export async function saveDraftState(state: DraftState): Promise<void> {
       });
       return;
     } catch (err) {
-      console.error('Failed writing to Vercel Blob, saving locally:', err);
+      console.error('Failed writing to Vercel Blob:', err);
     }
   }
 
   // Local fallback
-  ensureLocalDir();
-  fs.writeFileSync(LOCAL_STATE_FILE, jsonContent, 'utf-8');
+  if (safeEnsureLocalDir()) {
+    try {
+      fs.writeFileSync(LOCAL_STATE_FILE, jsonContent, 'utf-8');
+    } catch (e) {
+      console.warn('Could not write to local filesystem, state kept in memory:', e);
+    }
+  }
 }
 
 /**
@@ -145,6 +169,10 @@ export async function claimCandidate(
       return { success: false, error: 'Candidate not found.' };
     }
 
+    if (candidate.approvalStatus === 'pending') {
+      return { success: false, error: 'This candidate is currently awaiting admin approval.' };
+    }
+
     if (candidate.assignedToLeadId) {
       return {
         success: false,
@@ -152,7 +180,6 @@ export async function claimCandidate(
       };
     }
 
-    // Check quota
     const currentPicks = state.candidates.filter((c) => c.assignedToLeadId === currentLead.id).length;
     if (currentLead.quota > 0 && currentPicks >= currentLead.quota) {
       return {
@@ -161,15 +188,12 @@ export async function claimCandidate(
       };
     }
 
-    // Assign candidate
     candidate.assignedToLeadId = currentLead.id;
     candidate.assignedToLeadName = currentLead.name;
     candidate.assignedToLeadEmail = currentLead.email;
     candidate.assignedAt = new Date().toISOString();
 
-    // Recalculate lead picked counts
     state.leads = recalculateQuotas(state.leads, state.candidates);
-
     await saveDraftState(state);
 
     const remaining = Math.max(0, currentLead.quota - (currentPicks + 1));
@@ -182,7 +206,7 @@ export async function claimCandidate(
 }
 
 /**
- * Release/Unpick a candidate
+ * Release a candidate back to pool
  */
 export async function releaseCandidate(
   candidateId: string,
@@ -197,10 +221,9 @@ export async function releaseCandidate(
     }
 
     if (!candidate.assignedToLeadId) {
-      return { success: true }; // already free
+      return { success: true };
     }
 
-    // Verify permission: Must be Admin OR the lead who picked the candidate
     if (!caller.isAdmin) {
       const isOwner =
         candidate.assignedToLeadId === caller.id ||
@@ -223,8 +246,127 @@ export async function releaseCandidate(
 }
 
 /**
- * Admin action: Save updated candidate list from uploaded file & re-apportion quotas
+ * Team Lead proposes a custom candidate outside the spreadsheet
  */
+export async function proposeCandidate(
+  data: {
+    name: string;
+    role?: string;
+    department?: string;
+    email?: string;
+    phone?: string;
+    skills?: string[];
+    notes?: string;
+  },
+  lead: { id: string; name: string; email: string }
+): Promise<{ success: boolean; candidate?: Candidate; error?: string }> {
+  const trimmedName = String(data.name || '').trim();
+  if (!trimmedName) {
+    return { success: false, error: 'Candidate name is required.' };
+  }
+
+  return withLock(async () => {
+    const state = await getDraftState();
+
+    const id = `cand_custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newCandidate: Candidate = {
+      id,
+      name: trimmedName,
+      role: data.role?.trim() || undefined,
+      department: data.department?.trim() || undefined,
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      skills: data.skills && data.skills.length > 0 ? data.skills : undefined,
+      notes: data.notes?.trim() || undefined,
+      rawDetails: {
+        'Source': 'Custom Proposal',
+        'Proposed By': lead.name,
+        'Proposed By Email': lead.email,
+      },
+      assignedToLeadId: null,
+      assignedToLeadName: null,
+      assignedToLeadEmail: null,
+      assignedAt: null,
+      approvalStatus: 'pending',
+      proposedByLeadId: lead.id,
+      proposedByLeadName: lead.name,
+      proposedByLeadEmail: lead.email,
+      proposedAt: new Date().toISOString(),
+    };
+
+    state.candidates.push(newCandidate);
+    await saveDraftState(state);
+
+    return { success: true, candidate: newCandidate };
+  });
+}
+
+/**
+ * Admin approves a proposed candidate and assigns them directly to the proposing lead
+ */
+export async function approveProposal(
+  candidateId: string
+): Promise<{ success: boolean; candidate?: Candidate; error?: string }> {
+  return withLock(async () => {
+    const state = await getDraftState();
+    const candidate = state.candidates.find((c) => c.id === candidateId);
+
+    if (!candidate) {
+      return { success: false, error: 'Candidate proposal not found.' };
+    }
+
+    if (candidate.approvalStatus !== 'pending') {
+      return { success: false, error: 'Proposal is already processed.' };
+    }
+
+    candidate.approvalStatus = 'approved';
+
+    if (candidate.proposedByLeadId) {
+      const targetLead = state.leads.find((l) => l.id === candidate.proposedByLeadId);
+      if (targetLead) {
+        candidate.assignedToLeadId = targetLead.id;
+        candidate.assignedToLeadName = targetLead.name;
+        candidate.assignedToLeadEmail = targetLead.email;
+        candidate.assignedAt = new Date().toISOString();
+
+        const leadCurrentPicks = state.candidates.filter(
+          (c) => c.assignedToLeadId === targetLead.id && c.id !== candidate.id
+        ).length;
+        if (targetLead.quota <= leadCurrentPicks) {
+          targetLead.quota = leadCurrentPicks + 1;
+          targetLead.customQuota = targetLead.quota;
+        }
+      }
+    }
+
+    state.leads = recalculateQuotas(state.leads, state.candidates);
+    await saveDraftState(state);
+
+    return { success: true, candidate };
+  });
+}
+
+/**
+ * Admin rejects a proposed candidate
+ */
+export async function rejectProposal(
+  candidateId: string
+): Promise<{ success: boolean; error?: string }> {
+  return withLock(async () => {
+    const state = await getDraftState();
+    const index = state.candidates.findIndex((c) => c.id === candidateId);
+
+    if (index === -1) {
+      return { success: false, error: 'Proposal not found.' };
+    }
+
+    state.candidates.splice(index, 1);
+    await saveDraftState(state);
+
+    return { success: true };
+  });
+}
+
 export async function importCandidates(
   candidates: Candidate[],
   filename: string
@@ -242,9 +384,6 @@ export async function importCandidates(
   });
 }
 
-/**
- * Admin action: Reset all draft picks
- */
 export async function resetDraftPicks(): Promise<DraftState> {
   return withLock(async () => {
     const state = await getDraftState();
@@ -260,9 +399,6 @@ export async function resetDraftPicks(): Promise<DraftState> {
   });
 }
 
-/**
- * Admin action: Add or update a lead
- */
 export async function upsertLead(leadData: {
   email: string;
   name?: string;
@@ -271,19 +407,7 @@ export async function upsertLead(leadData: {
   return withLock(async () => {
     const state = await getDraftState();
     const normalizedEmail = leadData.email.trim().toLowerCase();
-
     const existingIndex = state.leads.findIndex((l) => l.email.toLowerCase() === normalizedEmail);
-
-    const colors = [
-      'bg-blue-500',
-      'bg-indigo-500',
-      'bg-purple-500',
-      'bg-emerald-500',
-      'bg-amber-500',
-      'bg-rose-500',
-      'bg-cyan-500',
-      'bg-teal-500',
-    ];
 
     if (existingIndex >= 0) {
       state.leads[existingIndex] = {
@@ -292,12 +416,10 @@ export async function upsertLead(leadData: {
         customQuota: leadData.customQuota,
       };
     } else {
-      const color = colors[state.leads.length % colors.length];
       const newLead: Lead = {
         id: `lead_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         email: normalizedEmail,
         name: leadData.name?.trim() || normalizedEmail.split('@')[0],
-        avatarColor: color,
         quota: 0,
         customQuota: leadData.customQuota,
         pickedCount: 0,
@@ -312,14 +434,10 @@ export async function upsertLead(leadData: {
   });
 }
 
-/**
- * Admin action: Delete a lead
- */
 export async function removeLead(leadId: string): Promise<DraftState> {
   return withLock(async () => {
     const state = await getDraftState();
 
-    // Release any candidates picked by this lead
     for (const c of state.candidates) {
       if (c.assignedToLeadId === leadId) {
         c.assignedToLeadId = null;
@@ -336,9 +454,6 @@ export async function removeLead(leadId: string): Promise<DraftState> {
   });
 }
 
-/**
- * Admin action: Toggle draft lock
- */
 export async function setDraftLock(isLocked: boolean): Promise<DraftState> {
   return withLock(async () => {
     const state = await getDraftState();

@@ -12,10 +12,12 @@ import {
   Eye,
   RefreshCw,
   AlertTriangle,
+  UserPlus,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { CandidatePreviewModal } from '@/components/CandidatePreviewModal';
 import { MyTeamDrawer } from '@/components/MyTeamDrawer';
+import { ProposeCandidateModal } from '@/components/ProposeCandidateModal';
 import { Candidate, DraftState, Lead, UserSession } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,8 +42,8 @@ export default function DraftPage() {
   const [previewCandidate, setPreviewCandidate] = useState<Candidate | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isProposeOpen, setIsProposeOpen] = useState(false);
 
-  // Fetch session & draft state
   const fetchData = useCallback(async (isBackground = false) => {
     if (!isBackground) setRefreshing(true);
     try {
@@ -82,7 +84,6 @@ export default function DraftPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Handle Pick
   const handlePickCandidate = async (candidateId: string) => {
     const res = await fetch('/api/draft/pick', {
       method: 'POST',
@@ -102,7 +103,6 @@ export default function DraftPage() {
     }
   };
 
-  // Handle Release
   const handleReleaseCandidate = async (candidateId: string) => {
     const res = await fetch('/api/draft/release', {
       method: 'POST',
@@ -133,19 +133,22 @@ export default function DraftPage() {
     setIsModalOpen(true);
   };
 
-  const departments = useMemo(() => {
+  // Only show approved candidates in public catalog
+  const approvedCandidates = useMemo(() => {
     if (!draftState?.candidates) return [];
+    return draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+  }, [draftState?.candidates]);
+
+  const departments = useMemo(() => {
     const depts = new Set<string>();
-    draftState.candidates.forEach((c) => {
+    approvedCandidates.forEach((c) => {
       if (c.department) depts.add(c.department);
     });
     return Array.from(depts);
-  }, [draftState?.candidates]);
+  }, [approvedCandidates]);
 
   const filteredCandidates = useMemo(() => {
-    if (!draftState?.candidates) return [];
-
-    return draftState.candidates.filter((candidate) => {
+    return approvedCandidates.filter((candidate) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = candidate.name.toLowerCase().includes(q);
@@ -178,18 +181,17 @@ export default function DraftPage() {
 
       return true;
     });
-  }, [draftState?.candidates, searchQuery, selectedDept, statusFilter, currentLead]);
+  }, [approvedCandidates, searchQuery, selectedDept, statusFilter, currentLead]);
 
   const stats = useMemo(() => {
-    if (!draftState) return { total: 0, available: 0, claimed: 0, myPicks: 0 };
-    const total = draftState.candidates.length;
-    const claimed = draftState.candidates.filter((c) => c.assignedToLeadId).length;
+    const total = approvedCandidates.length;
+    const claimed = approvedCandidates.filter((c) => c.assignedToLeadId).length;
     const available = total - claimed;
     const myPicks = currentLead
-      ? draftState.candidates.filter((c) => c.assignedToLeadId === currentLead.id).length
+      ? approvedCandidates.filter((c) => c.assignedToLeadId === currentLead.id).length
       : 0;
     return { total, available, claimed, myPicks };
-  }, [draftState, currentLead]);
+  }, [approvedCandidates, currentLead]);
 
   if (loading) {
     return (
@@ -215,7 +217,6 @@ export default function DraftPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* Paused notice */}
         {draftState?.settings.isLocked && (
           <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
@@ -233,19 +234,30 @@ export default function DraftPage() {
                 </CardTitle>
                 <p className="text-xs text-zinc-500 mt-1">
                   {currentLead
-                    ? `Welcome, ${currentLead.name}. Select candidates to build your team.`
+                    ? `Welcome, ${currentLead.name}. Select candidates or propose outside members.`
                     : 'Candidate pool overview.'}
                 </p>
               </div>
 
               {currentLead && (
-                <Button
-                  onClick={() => setIsDrawerOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>My Squad ({stats.myPicks} / {currentLead.quota})</span>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsProposeOpen(true)}
+                    className="flex items-center gap-1.5"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>Propose Member</span>
+                  </Button>
+
+                  <Button
+                    onClick={() => setIsDrawerOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>My Squad ({stats.myPicks} / {currentLead.quota})</span>
+                  </Button>
+                </div>
               )}
             </div>
           </CardHeader>
@@ -484,6 +496,13 @@ export default function DraftPage() {
         candidates={draftState?.candidates || []}
         onSelectCandidate={openPreview}
         onReleaseCandidate={handleReleaseCandidate}
+      />
+
+      {/* Propose Candidate Modal */}
+      <ProposeCandidateModal
+        isOpen={isProposeOpen}
+        onClose={() => setIsProposeOpen(false)}
+        onSuccess={() => fetchData(true)}
       />
     </div>
   );

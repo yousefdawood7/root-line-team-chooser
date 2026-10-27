@@ -11,7 +11,7 @@ export interface Lead {
 
 export interface Candidate {
   id: string;
-  name: string;
+  name: string; // Only required field
   email?: string;
   phone?: string;
   role?: string;
@@ -24,6 +24,12 @@ export interface Candidate {
   assignedToLeadName?: string | null;
   assignedToLeadEmail?: string | null;
   assignedAt?: string | null;
+  // Proposal & Approval Workflow
+  approvalStatus?: 'approved' | 'pending' | 'rejected';
+  proposedByLeadId?: string | null;
+  proposedByLeadName?: string | null;
+  proposedByLeadEmail?: string | null;
+  proposedAt?: string | null;
 }
 
 export interface DraftSettings {

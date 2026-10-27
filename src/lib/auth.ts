@@ -37,10 +37,14 @@ export async function verifySession(token: string): Promise<UserSession | null> 
  * Read current session from cookies
  */
 export async function getSession(): Promise<UserSession | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-  if (!token) return null;
-  return verifySession(token);
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
+    if (!token) return null;
+    return verifySession(token);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -63,6 +67,18 @@ export async function setSessionCookie(session: UserSession) {
  * Clear session cookie (logout)
  */
 export async function clearSessionCookie() {
-  const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_NAME);
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(COOKIE_NAME, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      expires: new Date(0),
+      path: '/',
+    });
+    cookieStore.delete(COOKIE_NAME);
+  } catch (err) {
+    console.error('Error clearing cookie:', err);
+  }
 }

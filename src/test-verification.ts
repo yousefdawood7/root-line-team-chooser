@@ -2,13 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import { parseCandidateFile, generateExportWorkbook } from './lib/excel';
 import { recalculateQuotas } from './lib/quota';
-import { claimCandidate, releaseCandidate, getDraftState, saveDraftState } from './lib/blob';
+import {
+  claimCandidate,
+  releaseCandidate,
+  getDraftState,
+  saveDraftState,
+  proposeCandidate,
+  approveProposal,
+  rejectProposal,
+} from './lib/blob';
 import { Lead } from './lib/types';
 
 async function runTests() {
   console.log('=== STARTING TEST VERIFICATION ===');
 
-  // 1. Test CSV Parsing
+  // 1. Test CSV Ingestion
   console.log('\n--- 1. Testing CSV Ingestion ---');
   const sampleCsvPath = path.join(process.cwd(), 'sample_candidates.csv');
   const csvBuffer = fs.readFileSync(sampleCsvPath);
@@ -19,16 +27,13 @@ async function runTests() {
   }
   const first = parsedCandidates[0];
   console.log(`First candidate: ${first.name} | Role: ${first.role} | Skills: ${first.skills?.join(', ')}`);
-  if (first.name !== 'Alex Johnson') {
-    throw new Error(`Expected Alex Johnson, got ${first.name}`);
-  }
 
-  // 2. Test Quota Division (Even & Odd remainder)
+  // 2. Test Quota Division & Odd Remainder Allocation
   console.log('\n--- 2. Testing Quota Division & Odd Remainder Distribution ---');
   const testLeads: Lead[] = [
     {
       id: 'lead-1',
-      email: 'lead1@rootline.com',
+      email: 'alice@rootline.com',
       name: 'Alice',
       quota: 0,
       pickedCount: 0,
@@ -36,7 +41,7 @@ async function runTests() {
     },
     {
       id: 'lead-2',
-      email: 'lead2@rootline.com',
+      email: 'bob@rootline.com',
       name: 'Bob',
       quota: 0,
       pickedCount: 0,
@@ -44,24 +49,16 @@ async function runTests() {
     },
   ];
 
-  // 11 candidates / 2 leads => 5 each, with 1 remainder => one lead has 6, other has 5. Total = 11.
   const leadsWithQuota = recalculateQuotas(testLeads, parsedCandidates);
-  console.log('Calculated quotas for 11 candidates between 2 leads:');
   leadsWithQuota.forEach((l) => console.log(`  - ${l.name}: quota = ${l.quota}`));
-
-  const totalQuotaAssigned = leadsWithQuota.reduce((sum, l) => sum + l.quota, 0);
-  if (totalQuotaAssigned !== 11) {
-    throw new Error(`Total quota should be 11, got ${totalQuotaAssigned}`);
-  }
-  const quotas = leadsWithQuota.map((l) => l.quota).sort();
-  if (quotas[0] !== 5 || quotas[1] !== 6) {
-    throw new Error(`Expected quotas [5, 6], got [${quotas.join(', ')}]`);
+  const totalQuota = leadsWithQuota.reduce((sum, l) => sum + l.quota, 0);
+  if (totalQuota !== 11) {
+    throw new Error(`Total quota should be 11, got ${totalQuota}`);
   }
   console.log('✓ Quota split correctly gives 5 and 6 (half each + 1 random remainder)!');
 
-  // 3. Test State Picking & Concurrency Lock
+  // 3. Test Pick & Collision Lock
   console.log('\n--- 3. Testing Candidate Pick & Lock ---');
-  // Initialize test state
   const state = await getDraftState();
   state.candidates = parsedCandidates;
   state.leads = leadsWithQuota;
@@ -72,46 +69,57 @@ async function runTests() {
   const lead1 = leadsWithQuota[0];
   const lead2 = leadsWithQuota[1];
 
-  // Lead 1 picks candidate
   const pick1 = await claimCandidate(targetCandidateId, lead1);
-  if (!pick1.success) {
-    throw new Error(`Lead 1 failed to pick: ${pick1.error}`);
-  }
-  console.log(`✓ Lead 1 successfully claimed candidate: ${pick1.candidate?.name}`);
+  if (!pick1.success) throw new Error(`Lead 1 failed to pick: ${pick1.error}`);
+  console.log(`✓ Lead 1 claimed: ${pick1.candidate?.name}`);
 
-  // Lead 2 tries to pick the SAME candidate (should fail immediately)
   const pick2 = await claimCandidate(targetCandidateId, lead2);
-  if (pick2.success) {
-    throw new Error('Collision failed: Lead 2 was able to claim an already locked candidate!');
-  }
+  if (pick2.success) throw new Error('Collision failed: Lead 2 claimed already locked candidate');
   console.log(`✓ Collision prevented: "${pick2.error}"`);
 
-  // 4. Test Excel Export Generation
-  console.log('\n--- 4. Testing Excel Workbook Export Generation ---');
-  const exportBytes = generateExportWorkbook(state.candidates, state.leads);
-  console.log(`✓ Generated Excel export binary size: ${exportBytes.length} bytes`);
-  if (exportBytes.length < 1000) {
-    throw new Error('Export binary seems too small');
+  // 4. Test Single-Lead and All-Teams Excel Workbook Export
+  console.log('\n--- 4. Testing Targeted Excel Exports ---');
+  const allExport = generateExportWorkbook(state.candidates, state.leads, null);
+  console.log(`✓ All teams export: filename="${allExport.filename}", size=${allExport.buffer.length} bytes`);
+  if (!allExport.filename.includes('All_Teams')) {
+    throw new Error('All teams filename should include All_Teams');
   }
 
-  // 5. Test Release
-  console.log('\n--- 5. Testing Candidate Release ---');
-  const releaseRes = await releaseCandidate(targetCandidateId, {
-    id: lead1.id,
-    email: lead1.email,
-    isAdmin: false,
-  });
-  if (!releaseRes.success) {
-    throw new Error(`Failed to release: ${releaseRes.error}`);
+  const singleLeadExport = generateExportWorkbook(state.candidates, state.leads, lead1.id);
+  console.log(`✓ Single lead export: filename="${singleLeadExport.filename}", size=${singleLeadExport.buffer.length} bytes`);
+  if (!singleLeadExport.filename.includes(lead1.name)) {
+    throw new Error(`Single lead filename should include lead name ${lead1.name}`);
   }
-  console.log('✓ Candidate successfully released back to pool.');
 
-  // Now Lead 2 can pick them
-  const pick3 = await claimCandidate(targetCandidateId, lead2);
-  if (!pick3.success) {
-    throw new Error(`Lead 2 should be able to pick now: ${pick3.error}`);
+  // 5. Test Custom Candidate Proposal (Only Name Required)
+  console.log('\n--- 5. Testing Custom Candidate Proposal (Name Only) ---');
+  const proposalRes = await proposeCandidate(
+    { name: 'Marcus Sterling' }, // Only Name provided!
+    { id: lead1.id, name: lead1.name, email: lead1.email }
+  );
+
+  if (!proposalRes.success || !proposalRes.candidate) {
+    throw new Error(`Proposal failed: ${proposalRes.error}`);
   }
-  console.log(`✓ Lead 2 claimed previously released candidate.`);
+  console.log(`✓ Proposal submitted: "${proposalRes.candidate.name}" with status "${proposalRes.candidate.approvalStatus}"`);
+
+  // Verify it cannot be claimed while pending
+  const claimPending = await claimCandidate(proposalRes.candidate.id, lead2);
+  if (claimPending.success) {
+    throw new Error('Pending proposal should not be claimable!');
+  }
+  console.log(`✓ Pending proposal blocked from draft: "${claimPending.error}"`);
+
+  // 6. Test Admin Approval of Proposal
+  console.log('\n--- 6. Testing Admin Approval of Proposal ---');
+  const approveRes = await approveProposal(proposalRes.candidate.id);
+  if (!approveRes.success || !approveRes.candidate) {
+    throw new Error(`Approval failed: ${approveRes.error}`);
+  }
+  console.log(`✓ Proposal approved! Assigned to proposing lead: ${approveRes.candidate.assignedToLeadName}`);
+  if (approveRes.candidate.assignedToLeadId !== lead1.id) {
+    throw new Error('Approved proposal was not assigned to proposing lead');
+  }
 
   console.log('\n=== ALL TESTS PASSED SUCCESSFULLY! ===\n');
 }

@@ -25,6 +25,7 @@ export function Navbar({ user, lead, isLocked }: NavbarProps) {
       router.refresh();
     } catch (e) {
       console.error('Logout error:', e);
+      window.location.href = '/login';
     }
   };
 
@@ -32,7 +33,7 @@ export function Navbar({ user, lead, isLocked }: NavbarProps) {
     <header className="sticky top-0 z-40 w-full border-b border-zinc-200 bg-white/95 backdrop-blur-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand with Official Rootline Logo */}
-        <Link href="/" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-2.5">
           <div className="h-9 w-9 relative rounded-lg overflow-hidden border border-zinc-200 bg-zinc-950 flex items-center justify-center shrink-0">
             <Image
               src="/logo.svg"
@@ -57,13 +58,13 @@ export function Navbar({ user, lead, isLocked }: NavbarProps) {
         <div className="flex items-center gap-3">
           {user?.role === 'admin' ? (
             <div className="flex items-center gap-2">
-              <Button asChild size="sm" variant="default">
+              <Button asChild size="sm" variant="default" className="h-8 text-xs">
                 <Link href="/admin" className="flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Admin
                 </Link>
               </Button>
-              <Button asChild size="sm" variant="ghost">
+              <Button asChild size="sm" variant="ghost" className="h-8 text-xs">
                 <Link href="/draft">
                   Draft Board
                 </Link>
@@ -71,7 +72,7 @@ export function Navbar({ user, lead, isLocked }: NavbarProps) {
             </div>
           ) : lead ? (
             <div className="hidden sm:flex items-center gap-2">
-              <Badge variant="secondary" className="px-3 py-1 font-medium">
+              <Badge variant="secondary" className="px-3 py-1 font-medium text-xs">
                 <span className="text-zinc-500 mr-1.5">Picks:</span>
                 <span className="font-semibold text-zinc-950">
                   {lead.pickedCount} / {lead.quota}
@@ -80,26 +81,27 @@ export function Navbar({ user, lead, isLocked }: NavbarProps) {
             </div>
           ) : null}
 
-          {/* User profile & Logout */}
+          {/* User profile & Prominent Logout Button */}
           {user && (
-            <div className="flex items-center gap-3 pl-3 border-l border-zinc-200">
+            <div className="flex items-center gap-2.5 pl-3 border-l border-zinc-200">
               <div className="text-right hidden md:block">
-                <p className="text-xs font-semibold text-zinc-900 truncate max-w-[150px]">
+                <p className="text-xs font-semibold text-zinc-900 truncate max-w-[130px]">
                   {lead?.name || user.name || user.email}
                 </p>
-                <p className="text-[11px] text-zinc-500 truncate max-w-[150px]">
+                <p className="text-[10px] text-zinc-500 truncate max-w-[130px]">
                   {user.email}
                 </p>
               </div>
 
               <Button
-                variant="ghost"
-                size="icon"
+                variant="outline"
+                size="sm"
                 onClick={handleLogout}
-                title="Sign out"
-                className="text-zinc-500 hover:text-zinc-900"
+                title="Log out of account"
+                className="h-8 text-xs px-2.5 text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 border-zinc-200 flex items-center gap-1.5 cursor-pointer"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="font-medium">Log Out</span>
               </Button>
             </div>
           )}

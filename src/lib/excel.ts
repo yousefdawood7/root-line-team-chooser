@@ -2,7 +2,6 @@ import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { Candidate, Lead } from './types';
 
-// Helper to normalize column header
 function cleanHeader(header: string): string {
   return String(header || '')
     .trim()
@@ -74,7 +73,6 @@ export function parseCandidateFile(
         }
       }
 
-      // Fallback name if none detected
       if (!name) {
         const firstNonEmptyVal = Object.values(row).find((v) => String(v).trim().length > 0);
         name = firstNonEmptyVal ? String(firstNonEmptyVal) : `Candidate #${index + 1}`;
@@ -97,56 +95,90 @@ export function parseCandidateFile(
         assignedToLeadName: null,
         assignedToLeadEmail: null,
         assignedAt: null,
+        approvalStatus: 'approved',
       };
     });
 }
 
 /**
- * Generate an Excel file with the full roster & lead assignments
+ * Generate an Excel file with the roster & lead assignments.
  */
-export function generateExportWorkbook(candidates: Candidate[], leads: Lead[]): Uint8Array {
+export function generateExportWorkbook(
+  candidates: Candidate[] = [],
+  leads: Lead[] = [],
+  filterLeadId?: string | null
+): { buffer: Uint8Array; filename: string } {
   const leadMap = new Map<string, Lead>();
   for (const l of leads) leadMap.set(l.id, l);
 
-  const exportRows = candidates.map((c, idx) => {
-    const lead = c.assignedToLeadId ? leadMap.get(c.assignedToLeadId) : null;
-    return {
-      '#': idx + 1,
-      'Candidate Name': c.name,
-      'Status': c.assignedToLeadId ? 'Assigned' : 'Unassigned',
-      'Assigned Team Lead': lead ? lead.name : 'None',
-      'Team Lead Email': lead ? lead.email : 'None',
-      'Assigned At': c.assignedAt ? new Date(c.assignedAt).toLocaleString() : '',
-      'Role': c.role || '',
-      'Email': c.email || '',
-      'Phone': c.phone || '',
-      'Department': c.department || '',
-      'Experience': c.experience || '',
-      'Skills': (c.skills || []).join(', '),
-      'Notes': c.notes || '',
-      ...c.rawDetails,
-    };
-  });
+  const targetLead = filterLeadId ? leadMap.get(filterLeadId) : null;
+
+  const targetCandidates = targetLead
+    ? candidates.filter((c) => c.assignedToLeadId === targetLead.id)
+    : candidates;
+
+  let exportRows: Record<string, any>[] = [];
+
+  if (targetCandidates.length === 0) {
+    exportRows = [
+      {
+        'Status': 'No candidates in this roster',
+        'Team Lead': targetLead ? targetLead.name : 'All',
+        'Export Date': new Date().toLocaleString(),
+      },
+    ];
+  } else {
+    exportRows = targetCandidates.map((c, idx) => {
+      const lead = c.assignedToLeadId ? leadMap.get(c.assignedToLeadId) : null;
+      return {
+        '#': idx + 1,
+        'Candidate Name': c.name,
+        'Status': c.assignedToLeadId ? 'Assigned' : 'Unassigned',
+        'Team Lead': lead ? lead.name : 'Unassigned',
+        'Team Lead Email': lead ? lead.email : '',
+        'Assigned Date': c.assignedAt ? new Date(c.assignedAt).toLocaleString() : '',
+        'Role': c.role || '',
+        'Email': c.email || '',
+        'Phone': c.phone || '',
+        'Department': c.department || '',
+        'Experience': c.experience || '',
+        'Skills': (c.skills || []).join(', '),
+        'Notes': c.notes || '',
+        ...(c.rawDetails || {}),
+      };
+    });
+  }
 
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(exportRows);
-  XLSX.utils.book_append_sheet(wb, ws, 'Team Assignments');
+  const safeSheetName = (targetLead
+    ? `${targetLead.name.replace(/[^\w\s-]/g, '').slice(0, 20)} Squad`
+    : 'All Team Assignments'
+  ).slice(0, 31);
 
-  // Also add a summary sheet per Team Lead
-  const summaryRows = leads.map((lead) => {
-    const teamMembers = candidates.filter((c) => c.assignedToLeadId === lead.id);
-    return {
-      'Team Lead': lead.name,
-      'Email': lead.email,
-      'Quota': lead.quota,
-      'Picks Claimed': teamMembers.length,
-      'Remaining Quota': Math.max(0, lead.quota - teamMembers.length),
-      'Members': teamMembers.map((m) => m.name).join(', '),
-    };
-  });
-  const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
-  XLSX.utils.book_append_sheet(wb, summaryWs, 'Leads Summary');
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+
+  if (!targetLead && leads.length > 0) {
+    const summaryRows = leads.map((lead) => {
+      const teamMembers = candidates.filter((c) => c.assignedToLeadId === lead.id);
+      return {
+        'Team Lead': lead.name,
+        'Email': lead.email,
+        'Quota': lead.quota,
+        'Candidates Claimed': teamMembers.length,
+        'Remaining Slots': Math.max(0, lead.quota - teamMembers.length),
+        'Team Members': teamMembers.map((m) => m.name).join(', '),
+      };
+    });
+    const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  }
+
+  const safeLeadName = targetLead
+    ? targetLead.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    : 'All_Teams';
+  const filename = `RootLine_Team_${safeLeadName}.xlsx`;
 
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  return new Uint8Array(buf);
+  return { buffer: new Uint8Array(buf), filename };
 }
