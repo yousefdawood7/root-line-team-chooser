@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   Download,
   RotateCcw,
@@ -16,6 +17,7 @@ import {
   Check,
   X,
   UserCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { ExcelUploader } from '@/components/ExcelUploader';
@@ -78,6 +80,9 @@ export default function AdminPage() {
   // Proposal actions loading
   const [proposalActionLoading, setProposalActionLoading] = useState<string | null>(null);
 
+  // Download loading indicator
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   const fetchData = useCallback(async (isBackground = false) => {
     if (!isBackground) setRefreshing(true);
     try {
@@ -87,8 +92,8 @@ export default function AdminPage() {
         return;
       }
       const meData = await meRes.json();
-      if (meData.user?.role !== 'admin') {
-        router.push('/draft');
+      if (!meData.authenticated || meData.user?.role !== 'admin') {
+        router.push('/login');
         return;
       }
       setCurrentUser(meData.user);
@@ -112,6 +117,107 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  // Client-side PDF download with empty data guard
+  const handleDownloadPdf = async (leadId?: string, leadName?: string) => {
+    if (!draftState) return;
+
+    // Check if data exists
+    const candidatesToExport = leadId
+      ? draftState.candidates.filter((c) => c.assignedToLeadId === leadId && c.approvalStatus !== 'pending')
+      : draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+
+    if (candidatesToExport.length === 0) {
+      toast.error(
+        leadName
+          ? `No candidates in ${leadName}'s squad to export.`
+          : 'No candidates available to export yet.'
+      );
+      return;
+    }
+
+    try {
+      setDownloadingId(`pdf_${leadId || 'all'}`);
+      const url = leadId ? `/api/admin/pdf?leadId=${leadId}` : '/api/admin/pdf';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to download PDF');
+
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const targetName = leadName ? leadName.replace(/[^a-zA-Z0-9_-]/g, '_') : 'All_Teams';
+      link.download = `RootLine_Team_${targetName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toast.success(leadName ? `${leadName}'s PDF downloaded` : 'All Teams PDF downloaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Download error');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Client-side Excel download with empty data guard
+  const handleDownloadExcel = async (leadId?: string, leadName?: string) => {
+    if (!draftState) return;
+
+    const candidatesToExport = leadId
+      ? draftState.candidates.filter((c) => c.assignedToLeadId === leadId && c.approvalStatus !== 'pending')
+      : draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+
+    if (candidatesToExport.length === 0) {
+      toast.error(
+        leadName
+          ? `No candidates in ${leadName}'s squad to export.`
+          : 'No candidates available to export yet.'
+      );
+      return;
+    }
+
+    try {
+      setDownloadingId(`xlsx_${leadId || 'all'}`);
+      const url = leadId ? `/api/admin/export?leadId=${leadId}` : '/api/admin/export';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to download Excel');
+
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const targetName = leadName ? leadName.replace(/[^a-zA-Z0-9_-]/g, '_') : 'All_Teams';
+      link.download = `RootLine_Team_${targetName}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toast.success(leadName ? `${leadName}'s Excel downloaded` : 'All Teams Excel downloaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Download error');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Client-side print navigation with empty data check
+  const handlePrintNavigation = (leadId?: string) => {
+    if (!draftState) return;
+    const candidatesToPrint = leadId
+      ? draftState.candidates.filter((c) => c.assignedToLeadId === leadId && c.approvalStatus !== 'pending')
+      : draftState.candidates.filter((c) => c.approvalStatus !== 'pending');
+
+    if (candidatesToPrint.length === 0) {
+      toast.error('No candidate data to print.');
+      return;
+    }
+
+    const url = leadId ? `/admin/print?leadId=${leadId}` : '/admin/print';
+    router.push(url);
+  };
+
   const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault();
     setLeadError(null);
@@ -134,6 +240,7 @@ export default function AdminPage() {
       setNewEmail('');
       setNewName('');
       setNewQuota('');
+      toast.success('Team lead added successfully');
       await fetchData(true);
     } catch (err: any) {
       setLeadError(err.message || 'Error adding lead');
@@ -150,9 +257,10 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/admin/leads?id=${leadId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete lead');
+      toast.success('Lead removed');
       await fetchData(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -170,9 +278,10 @@ export default function AdminPage() {
       });
       if (!res.ok) throw new Error('Failed to update quota');
       setEditingLead(null);
+      toast.success('Quota updated');
       await fetchData(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -186,9 +295,10 @@ export default function AdminPage() {
         body: JSON.stringify({ isLocked: nextLocked }),
       });
       if (!res.ok) throw new Error('Failed to update draft status');
+      toast.info(nextLocked ? 'Draft paused' : 'Draft resumed');
       await fetchData(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -198,9 +308,10 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/reset', { method: 'POST' });
       if (!res.ok) throw new Error('Failed to reset draft');
       setIsResetDialogOpen(false);
+      toast.success('All picks have been reset');
       await fetchData(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setResetting(false);
     }
@@ -218,6 +329,7 @@ export default function AdminPage() {
       throw new Error(d.error || 'Failed to release');
     }
 
+    toast.success('Candidate released to available pool');
     await fetchData(true);
     setIsPreviewOpen(false);
   };
@@ -234,9 +346,10 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to process proposal');
 
+      toast.success(action === 'approve' ? 'Proposal approved & assigned' : 'Proposal rejected');
       await fetchData(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setProposalActionLoading(null);
     }
@@ -299,16 +412,35 @@ export default function AdminPage() {
               )}
             </Button>
 
-            <Button asChild size="sm" variant="default">
-              <a href="/api/admin/export" download className="flex items-center gap-1.5">
-                <Download className="w-3.5 h-3.5" /> Export All (Excel)
-              </a>
+            <Button
+              size="sm"
+              variant="default"
+              disabled={downloadingId === 'xlsx_all'}
+              onClick={() => handleDownloadExcel()}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{downloadingId === 'xlsx_all' ? 'Exporting...' : 'Export All (Excel)'}</span>
             </Button>
 
-            <Button asChild size="sm" variant="outline">
-              <a href="/admin/print" target="_blank" className="flex items-center gap-1.5">
-                <Printer className="w-3.5 h-3.5" /> Print All (PDF)
-              </a>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={downloadingId === 'pdf_all'}
+              onClick={() => handleDownloadPdf()}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>{downloadingId === 'pdf_all' ? 'Generating...' : 'Download All (PDF)'}</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handlePrintNavigation()}
+              className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-950 cursor-pointer text-xs"
+            >
+              Print Preview
             </Button>
 
             <Button
@@ -674,17 +806,27 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Per-Lead Export Actions */}
+                    {/* Per-Lead Export Actions with in-place client handling & toast */}
                     <div className="pt-2 border-t border-zinc-200 flex items-center justify-end gap-1.5">
-                      <Button asChild size="sm" variant="ghost" className="h-7 text-xs px-2 text-zinc-600 hover:text-zinc-950">
-                        <a href={`/api/admin/export?leadId=${lead.id}`} download title={`Export Excel for ${lead.name}`}>
-                          <Download className="w-3 h-3 mr-1" /> Excel
-                        </a>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={downloadingId === `xlsx_${lead.id}`}
+                        onClick={() => handleDownloadExcel(lead.id, lead.name)}
+                        className="h-7 text-xs px-2 text-zinc-600 hover:text-zinc-950 cursor-pointer"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        <span>{downloadingId === `xlsx_${lead.id}` ? '...' : 'Excel'}</span>
                       </Button>
-                      <Button asChild size="sm" variant="outline" className="h-7 text-xs px-2">
-                        <a href={`/admin/print?leadId=${lead.id}`} target="_blank" title={`Print or Save PDF for ${lead.name}`}>
-                          <Printer className="w-3 h-3 mr-1" /> PDF
-                        </a>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={downloadingId === `pdf_${lead.id}`}
+                        onClick={() => handleDownloadPdf(lead.id, lead.name)}
+                        className="h-7 text-xs px-2 cursor-pointer"
+                      >
+                        <Printer className="w-3 h-3 mr-1" />
+                        <span>{downloadingId === `pdf_${lead.id}` ? '...' : 'PDF'}</span>
                       </Button>
                     </div>
                   </div>

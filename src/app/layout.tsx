@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Toaster } from '@/components/ui/sonner';
 
 export const metadata: Metadata = {
   title: 'Root Line | Team Chooser',
@@ -20,6 +21,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased bg-white text-zinc-950">
       <body className="min-h-full flex flex-col bg-white text-zinc-950">
         {children}
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );
