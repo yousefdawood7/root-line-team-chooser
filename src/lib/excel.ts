@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
 import { Candidate, ColumnMapping, Lead } from './types';
 
@@ -292,13 +293,13 @@ export function parseCandidateFile(
 }
 
 /**
- * Generate an Excel file with the roster & lead assignments.
+ * Generate a beautifully styled corporate Excel file with the roster & lead assignments using ExcelJS.
  */
-export function generateExportWorkbook(
+export async function generateExportWorkbook(
   candidates: Candidate[] = [],
   leads: Lead[] = [],
   filterLeadId?: string | null
-): { buffer: Uint8Array; filename: string } {
+): Promise<{ buffer: Uint8Array; filename: string }> {
   const leadMap = new Map<string, Lead>();
   for (const l of leads) leadMap.set(l.id, l);
 
@@ -308,69 +309,277 @@ export function generateExportWorkbook(
     ? candidates.filter((c) => c.assignedToLeadId === targetLead.id)
     : candidates;
 
-  let exportRows: Record<string, unknown>[] = [];
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Rootline Team Chooser';
+  wb.created = new Date();
 
-  if (targetCandidates.length === 0) {
-    exportRows = [
-      {
-        Status: 'No candidates in this roster',
-        'Team Lead': targetLead ? targetLead.name : 'All',
-        'Export Date': new Date().toLocaleString(),
-      },
-    ];
-  } else {
-    exportRows = targetCandidates.map((c, idx) => {
-      const lead = c.assignedToLeadId ? leadMap.get(c.assignedToLeadId) : null;
-      return {
-        '#': idx + 1,
-        'Candidate Name': c.name,
-        Status: c.assignedToLeadId ? 'Assigned' : 'Unassigned',
-        'Team Lead': lead ? lead.name : 'Unassigned',
-        'Team Lead Email': lead ? lead.email : '',
-        'Assigned Date': c.assignedAt ? new Date(c.assignedAt).toLocaleString() : '',
-        Role: c.role || '',
-        Email: c.email || '',
-        Phone: c.phone || '',
-        Department: c.department || '',
-        Experience: c.experience || '',
-        Skills: (c.skills || []).join(', '),
-        Notes: c.notes || '',
-        ...(c.rawDetails || {}),
-      };
-    });
-  }
-
-  const wb = XLSX.utils.book_new();
   const safeSheetName = (
     targetLead
       ? `${targetLead.name.replace(/[^\w\s-]/g, '').slice(0, 20)} Squad`
       : 'All Team Assignments'
   ).slice(0, 31);
 
-  const ws = XLSX.utils.json_to_sheet(exportRows);
-  XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+  const ws = wb.addWorksheet(safeSheetName, {
+    views: [{ showGridLines: true }],
+  });
 
-  if (!targetLead && leads.length > 0) {
-    const summaryRows = leads.map((lead) => {
-      const teamMembers = candidates.filter((c) => c.assignedToLeadId === lead.id);
-      return {
-        'Team Lead': lead.name,
-        Email: lead.email,
-        Quota: lead.quota,
-        'Candidates Claimed': teamMembers.length,
-        'Remaining Slots': Math.max(0, lead.quota - teamMembers.length),
-        'Team Members': teamMembers.map((m) => m.name).join(', '),
-      };
+  // Title Row (Row 1)
+  const titleRow = ws.addRow(['ROOTLINE — CANDIDATE DRAFT & TEAM SELECTION REPORT']);
+  titleRow.height = 28;
+  titleRow.getCell(1).font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF18181B' } };
+  titleRow.getCell(1).alignment = { vertical: 'middle' };
+
+  // Subtitle Row (Row 2)
+  const dateStr = new Date().toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const teamLabel = targetLead ? `Team: ${targetLead.name} (${targetLead.email})` : 'All Teams';
+  const subtitleRow = ws.addRow([`Generated: ${dateStr}  |  ${teamLabel}  |  Total Candidates: ${targetCandidates.length}`]);
+  subtitleRow.height = 18;
+  subtitleRow.getCell(1).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF71717A' } };
+  subtitleRow.getCell(1).alignment = { vertical: 'middle' };
+
+  // Blank spacer row (Row 3)
+  const spacerRow = ws.addRow([]);
+  spacerRow.height = 10;
+
+  // Table Headers (Row 4)
+  const headers = [
+    '#',
+    'Candidate Name',
+    'Status',
+    'Team Lead',
+    'Team Lead Email',
+    'Assigned Date',
+    'Role',
+    'Email',
+    'Phone',
+    'Department',
+    'Experience',
+    'Skills',
+    'Notes',
+  ];
+
+  const headerRow = ws.addRow(headers);
+  headerRow.height = 24;
+
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+    left: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+    bottom: { style: 'medium', color: { argb: 'FF18181B' } },
+    right: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+  };
+
+  headerRow.eachCell((cell, colNumber) => {
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF18181B' },
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: colNumber === 1 ? 'center' : 'left',
+      wrapText: false,
+    };
+    cell.border = thinBorder;
+  });
+
+  const cellBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+    left: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+    bottom: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+    right: { style: 'thin', color: { argb: 'FFE4E4E7' } },
+  };
+
+  if (targetCandidates.length === 0) {
+    const emptyRow = ws.addRow(['—', 'No candidates in this roster', '—', '—', '—', '—', '—', '—', '—', '—', '—', '—', '—']);
+    emptyRow.height = 20;
+    emptyRow.eachCell((cell) => {
+      cell.font = { name: 'Arial', size: 10, color: { argb: 'FF71717A' } };
+      cell.border = cellBorder;
+      cell.alignment = { vertical: 'middle' };
     });
-    const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
-    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  } else {
+    targetCandidates.forEach((c, idx) => {
+      const lead = c.assignedToLeadId ? leadMap.get(c.assignedToLeadId) : null;
+      const rowData = [
+        idx + 1,
+        c.name,
+        c.assignedToLeadId ? 'Assigned' : 'Unassigned',
+        lead ? lead.name : 'Unassigned',
+        lead ? lead.email : '',
+        c.assignedAt ? new Date(c.assignedAt).toLocaleString() : '',
+        c.role || '',
+        c.email || '',
+        c.phone || '',
+        c.department || '',
+        c.experience || '',
+        (c.skills || []).join(', '),
+        c.notes || '',
+      ];
+
+      const row = ws.addRow(rowData);
+      row.height = 20;
+
+      const isEven = idx % 2 === 1;
+      const rowBgColor = isEven ? 'FFF9FAFB' : 'FFFFFFFF';
+
+      row.eachCell((cell, colNumber) => {
+        cell.font = {
+          name: 'Arial',
+          size: 9.5,
+          color: { argb: 'FF18181B' },
+          bold: colNumber === 2,
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: rowBgColor },
+        };
+        cell.border = cellBorder;
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: colNumber === 1 ? 'center' : 'left',
+          wrapText: colNumber === 12 || colNumber === 13,
+        };
+      });
+    });
+  }
+
+  // Auto-resize columns to fit content
+  ws.columns.forEach((col, colIdx) => {
+    let maxLen = 0;
+    col.eachCell?.({ includeEmpty: false }, (cell, rowNumber) => {
+      if (rowNumber <= 3) return;
+      const cellVal = cell.value ? String(cell.value) : '';
+      if (cellVal.length > maxLen) {
+        maxLen = cellVal.length;
+      }
+    });
+
+    const minWidths: Record<number, number> = {
+      1: 6,   // #
+      2: 24,  // Candidate Name
+      3: 14,  // Status
+      4: 20,  // Team Lead
+      5: 24,  // Team Lead Email
+      6: 20,  // Assigned Date
+      7: 18,  // Role
+      8: 24,  // Email
+      9: 16,  // Phone
+      10: 16, // Department
+      11: 14, // Experience
+      12: 30, // Skills
+      13: 30, // Notes
+    };
+
+    const minWidth = minWidths[colIdx + 1] || 12;
+    col.width = Math.max(minWidth, Math.min(50, maxLen + 3));
+  });
+
+  // If no single lead was filtered and leads exist, generate a styled Summary sheet
+  if (!targetLead && leads.length > 0) {
+    const summaryWs = wb.addWorksheet('Summary', {
+      views: [{ showGridLines: true }],
+    });
+
+    const sTitleRow = summaryWs.addRow(['ROOTLINE — TEAM LEADS QUOTA & SQUAD SUMMARY']);
+    sTitleRow.height = 28;
+    sTitleRow.getCell(1).font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF18181B' } };
+    sTitleRow.getCell(1).alignment = { vertical: 'middle' };
+
+    const sSubtitleRow = summaryWs.addRow([`Report Generated: ${dateStr}  |  Total Teams: ${leads.length}`]);
+    sSubtitleRow.height = 18;
+    sSubtitleRow.getCell(1).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF71717A' } };
+    sSubtitleRow.getCell(1).alignment = { vertical: 'middle' };
+
+    summaryWs.addRow([]).height = 10;
+
+    const sHeaders = [
+      'Team Lead',
+      'Email',
+      'Quota',
+      'Candidates Claimed',
+      'Remaining Slots',
+      'Progress',
+      'Team Members',
+    ];
+    const sHeaderRow = summaryWs.addRow(sHeaders);
+    sHeaderRow.height = 24;
+
+    sHeaderRow.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF18181B' },
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: colNumber >= 3 && colNumber <= 6 ? 'center' : 'left',
+      };
+      cell.border = thinBorder;
+    });
+
+    leads.forEach((lead, lIdx) => {
+      const squad = candidates.filter((c) => c.assignedToLeadId === lead.id);
+      const claimed = squad.length;
+      const remaining = Math.max(0, lead.quota - claimed);
+      const pct = lead.quota > 0 ? `${Math.round((claimed / lead.quota) * 100)}%` : '0%';
+
+      const row = summaryWs.addRow([
+        lead.name,
+        lead.email,
+        lead.quota,
+        claimed,
+        remaining,
+        pct,
+        squad.map((m) => m.name).join(', ') || 'None',
+      ]);
+      row.height = 20;
+
+      const isEven = lIdx % 2 === 1;
+      const rowBgColor = isEven ? 'FFF9FAFB' : 'FFFFFFFF';
+
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF18181B' }, bold: colNumber === 1 };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: rowBgColor },
+        };
+        cell.border = cellBorder;
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: colNumber >= 3 && colNumber <= 6 ? 'center' : 'left',
+        };
+      });
+    });
+
+    summaryWs.columns.forEach((col, cIdx) => {
+      let maxLen = 0;
+      col.eachCell?.({ includeEmpty: false }, (cell, rowNumber) => {
+        if (rowNumber <= 3) return;
+        const cellVal = cell.value ? String(cell.value) : '';
+        if (cellVal.length > maxLen) {
+          maxLen = cellVal.length;
+        }
+      });
+      const minW = [22, 26, 12, 18, 16, 14, 40][cIdx] || 15;
+      summaryWs.getColumn(cIdx + 1).width = Math.max(minW, Math.min(60, maxLen + 3));
+    });
   }
 
   const safeLeadName = targetLead
-    ? targetLead.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    ? targetLead.name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || `Lead_${targetLead.id}`
     : 'All_Teams';
   const filename = `RootLine_Team_${safeLeadName}.xlsx`;
 
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  return { buffer: new Uint8Array(buf), filename };
+  const buffer = await wb.xlsx.writeBuffer();
+  return { buffer: new Uint8Array(buffer), filename };
 }

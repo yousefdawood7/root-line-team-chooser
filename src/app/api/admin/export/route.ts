@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const leadId = searchParams.get('leadId');
 
     const state = await getDraftState();
-    const { buffer, filename } = generateExportWorkbook(
+    const { buffer, filename } = await generateExportWorkbook(
       state.candidates || [],
       state.leads || [],
       leadId

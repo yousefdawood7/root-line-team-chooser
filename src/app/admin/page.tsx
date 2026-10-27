@@ -1528,13 +1528,6 @@ export default function AdminPage() {
                                   >
                                     Auto
                                   </Badge>
-                                ) : member.assignmentType === "manual_pick" ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[9px] py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0"
-                                  >
-                                    Picked
-                                  </Badge>
                                 ) : member.assignmentType === "admin" ? (
                                   <Badge
                                     variant="outline"

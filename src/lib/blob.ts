@@ -49,14 +49,6 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return nextLock;
 }
 
-function scrubLegacyDummyLeads(state: DraftState): boolean {
-  const initialCount = state.leads.length;
-  state.leads = state.leads.filter(
-    (l) => l.email.toLowerCase() !== 'lead1@rootline.com' && l.email.toLowerCase() !== 'lead2@rootline.com'
-  );
-  return state.leads.length !== initialCount;
-}
-
 async function putBlobState(jsonContent: string) {
   try {
     return await put(BLOB_STATE_FILENAME, jsonContent, {
@@ -90,11 +82,7 @@ export async function getDraftState(): Promise<DraftState> {
       if (blobResult && blobResult.statusCode === 200 && blobResult.stream) {
         const text = await new Response(blobResult.stream).text();
         const data = JSON.parse(text) as DraftState;
-        const wasScrubbed = scrubLegacyDummyLeads(data);
         memoryState = data;
-        if (wasScrubbed) {
-          saveDraftState(data).catch((e) => console.error('Failed to save scrubbed state to blob:', e));
-        }
         return data;
       }
     } catch (privateErr) {
@@ -115,12 +103,7 @@ export async function getDraftState(): Promise<DraftState> {
         });
         if (res.ok) {
           const data = (await res.json()) as DraftState;
-          const wasScrubbed = scrubLegacyDummyLeads(data);
           memoryState = data;
-          if (wasScrubbed) {
-            // Save clean state back to blob asynchronously
-            saveDraftState(data).catch((e) => console.error('Failed to save scrubbed state to blob:', e));
-          }
           return data;
         }
       } else {
@@ -140,11 +123,7 @@ export async function getDraftState(): Promise<DraftState> {
       if (fs.existsSync(LOCAL_STATE_FILE)) {
         const content = fs.readFileSync(LOCAL_STATE_FILE, 'utf-8');
         const parsed = JSON.parse(content) as DraftState;
-        const wasScrubbed = scrubLegacyDummyLeads(parsed);
         memoryState = parsed;
-        if (wasScrubbed) {
-          fs.writeFileSync(LOCAL_STATE_FILE, JSON.stringify(parsed, null, 2), 'utf-8');
-        }
         return parsed;
       }
       fs.writeFileSync(LOCAL_STATE_FILE, JSON.stringify(INITIAL_STATE, null, 2), 'utf-8');
@@ -154,7 +133,6 @@ export async function getDraftState(): Promise<DraftState> {
     }
   }
 
-  scrubLegacyDummyLeads(memoryState);
   return memoryState;
 }
 
