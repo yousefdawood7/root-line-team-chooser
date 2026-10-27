@@ -504,7 +504,7 @@ export default function AdminPage() {
                     onClick={() => {
                       dispatch({
                         type: 'START_EDIT_TITLE',
-                        currentTitle: draftState?.settings.title || 'Root Line Team Draft',
+                        currentTitle: draftState?.settings.title || 'Rootline Team Draft',
                       });
                     }}
                     title="Edit session title"

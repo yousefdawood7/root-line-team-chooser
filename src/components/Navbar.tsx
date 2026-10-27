@@ -35,7 +35,7 @@ export function Navbar({ user, lead }: NavbarProps) {
           <div className="h-9 w-9 relative rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center shrink-0">
             <Image
               src="/logo.svg"
-              alt="Root Line"
+              alt="Rootline"
               width={36}
               height={36}
               priority
@@ -44,7 +44,7 @@ export function Navbar({ user, lead }: NavbarProps) {
           </div>
           <div className="flex items-center gap-2">
             <span className="font-bold text-base tracking-tight text-zinc-950">
-              Root Line
+              Rootline
             </span>
             <Badge variant="outline" className="text-[11px] font-normal text-zinc-600">
               Team Chooser

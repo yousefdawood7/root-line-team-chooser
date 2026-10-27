@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const now = new Date();
     const dateFormatted = now.toISOString().slice(0, 16).replace('T', ' ');
-    const defaultTitle = `Root Line Draft - ${dateFormatted}`;
+    const defaultTitle = `Rootline Draft - ${dateFormatted}`;
 
     return NextResponse.json({
       success: true,

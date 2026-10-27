@@ -81,7 +81,7 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
 
       setPendingFile(file);
       setPreviewData(data);
-      setSessionTitle(data.defaultTitle || `Root Line Draft - ${new Date().toISOString().slice(0, 10)}`);
+      setSessionTitle(data.defaultTitle || `Rootline Draft - ${new Date().toISOString().slice(0, 10)}`);
 
       // Set initial suggested mapping
       setTitleCol(data.suggestedMapping?.titleCol || (data.headers && data.headers[0]) || '');
@@ -253,7 +253,7 @@ export function ExcelUploader({ onUploadSuccess }: ExcelUploaderProps) {
                 type="text"
                 value={sessionTitle}
                 onChange={(e) => setSessionTitle(e.target.value)}
-                placeholder="e.g. Root Line Draft - 2026-10-27"
+                placeholder="e.g. Rootline Draft - 2026-10-27"
                 className="bg-white text-xs h-8"
               />
               <p className="text-[11px] text-zinc-400">

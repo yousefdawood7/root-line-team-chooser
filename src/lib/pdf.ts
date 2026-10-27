@@ -40,7 +40,7 @@ export function generateRosterPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('ROOT LINE', margin + 6, currentY + 7);
+  doc.text('ROOTLINE', margin + 6, currentY + 7);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -174,7 +174,7 @@ export function generateRosterPDF(
 
   // Sign Box 2
   doc.line(margin + sigColWidth + 20, sigY, pageWidth - margin, sigY);
-  doc.text('Root Line Administrator Authorization', margin + sigColWidth + 20, sigY + 4);
+  doc.text('Rootline Administrator Authorization', margin + sigColWidth + 20, sigY + 4);
   doc.text('Date: _______________________', margin + sigColWidth + 20, sigY + 8);
 
   // Running Page Numbering
@@ -185,7 +185,7 @@ export function generateRosterPDF(
     doc.setFontSize(7);
     doc.setTextColor(160, 160, 165);
     doc.text(
-      `Root Line Team Chooser | Official Document | Page ${i} of ${totalPages}`,
+      `Rootline Team Chooser | Official Document | Page ${i} of ${totalPages}`,
       pageWidth / 2,
       pageHeight - 8,
       { align: 'center' }

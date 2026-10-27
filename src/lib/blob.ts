@@ -10,7 +10,7 @@ const LOCAL_STATE_FILE = path.join(LOCAL_DATA_DIR, 'state.json');
 
 const INITIAL_SETTINGS: DraftSettings = {
   id: 'default_draft',
-  title: 'Root Line Team Draft',
+  title: 'Rootline Team Draft',
   isLocked: false,
   totalCandidates: 0,
 };

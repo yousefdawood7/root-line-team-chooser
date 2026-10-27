@@ -60,7 +60,7 @@ export default function LoginPage() {
           <div className="inline-flex h-14 w-14 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.18)] items-center justify-center mb-3">
             <Image
               src="/logo.svg"
-              alt="Root Line"
+              alt="Rootline"
               width={56}
               height={56}
               priority
@@ -68,7 +68,7 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="text-xl font-bold tracking-tight text-zinc-950">
-            Root Line
+            Rootline
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">
             Team Chooser Portal

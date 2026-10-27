@@ -4,7 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 
 export const metadata: Metadata = {
-  title: 'Root Line | Team Chooser',
+  title: 'Rootline | Team Chooser',
   description: 'Team lead candidate selection platform',
   icons: {
     icon: '/logo.svg',

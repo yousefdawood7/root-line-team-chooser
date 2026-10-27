@@ -56,8 +56,8 @@ function PrintContent() {
   useEffect(() => {
     if (!loading && draftState && totalMembersCount > 0) {
       const docName = targetLead
-        ? `RootLine_Team_${targetLead.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`
-        : `RootLine_All_Teams_${new Date().toISOString().slice(0, 10)}`;
+        ? `Rootline_Team_${targetLead.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+        : `Rootline_All_Teams_${new Date().toISOString().slice(0, 10)}`;
       document.title = docName;
 
       const timer = setTimeout(() => {
@@ -117,7 +117,7 @@ function PrintContent() {
             <div className="h-11 w-11 relative rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center shrink-0">
               <Image
                 src="/logo.svg"
-                alt="Root Line"
+                alt="Rootline"
                 width={44}
                 height={44}
                 priority
@@ -126,7 +126,7 @@ function PrintContent() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-zinc-950">
-                Root Line Team Chooser
+                Rootline Team Chooser
               </h1>
               <p className="text-xs text-zinc-500 uppercase tracking-wider font-mono mt-0.5">
                 Official Roster Report — {targetLead ? `${targetLead.name}'s Squad` : 'All Teams'}
@@ -207,7 +207,7 @@ function PrintContent() {
             <p className="text-zinc-400 font-mono text-[11px]">Date & Signature</p>
           </div>
           <div>
-            <p className="text-zinc-500 mb-6">Root Line Administrator Verification:</p>
+            <p className="text-zinc-500 mb-6">Rootline Administrator Verification:</p>
             <div className="border-b border-zinc-400 w-3/4 mb-1" />
             <p className="text-zinc-400 font-mono text-[11px]">Authorization</p>
           </div>

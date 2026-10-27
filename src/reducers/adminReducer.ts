@@ -130,7 +130,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         ...state,
         currentUser: action.user,
         draftState: action.state,
-        titleInputVal: action.state?.settings?.title || 'Root Line Team Draft',
+        titleInputVal: action.state?.settings?.title || 'Rootline Team Draft',
         loading: false,
       };
 
